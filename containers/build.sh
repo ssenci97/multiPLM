@@ -23,6 +23,7 @@ pinned() { local c; c=$(col_of "$1" commit); [[ "$c" =~ ^[0-9a-f]{40}$ ]] || { l
 ###################################### engine
 MODE="${1:-build}"; GPU_TEST="${2:-}"
 case "$MODE" in orfeo|pull|test) host_only=1 ;; *) host_only=0 ;; esac
+if [ "$host_only" = 0 ] && { [ -n "${SLURM_JOB_ID:-}" ] || command -v sbatch >/dev/null || command -v squeue >/dev/null; }; then log "!! '$MODE' must run on a workstation with Docker or Podman, not on the cluster (no subuid, network-filesystem storage); build and ship there, then on the cluster: srun -p THIN --mem=16G -c 4 --time=01:00:00 containers/build.sh pull"; exit 1; fi
 if [ "$host_only" = 0 ] && [ -z "$engine" ]; then
   if command -v docker >/dev/null && docker info >/dev/null 2>&1; then engine=docker; else engine=podman; fi
 fi

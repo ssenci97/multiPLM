@@ -18,7 +18,7 @@ Pins come from `configs/tools.tsv`. Revisions and sizes were read from the Huggi
 
 | Backend | Env | Weights (pinned revision) | Size | Dim | Layers | Partition |
 |---|---|---|---|---|---|---|
-| `esm2_t6_8M` … `esm2_t36_3B` | `esm-fair` | fair-esm URLs (code `0b59d87…`); bytes pinned by `configs/checksums/` after the first download | 0.03–11.4 GB | 320–2560 | 6–36, all | GPU |
+| `esm2_t6_8M` … `esm2_t36_3B` | `esm-fair` | fair-esm URLs (code `0b59d87…`); bytes pinned by `configs/checksums/` after the first download | 0.03–5.7 GB | 320–2560 | 6–36, all | GPU |
 | `esm3_sm_open_v1` | `esm-evo` | `biohub/esm3-sm-open-v1@47f0545…` | 5.5 GB | 1536 | 48, **last only** | GPU |
 | `esmc_300m` / `esmc_600m` | `esm-evo` | `biohub/esmc-300m-2024-12@7f10b20…` / `esmc-600m-2024-12@e4d83bc…` | 1.33 / 2.3 GB | 960 / 1152 | 30 / 36, all | GPU |
 | `esmc_6b` | `esm-evo` | `biohub/ESMC-6B@9460559…` (fp32 safetensors, loaded shard by shard) | 25.4 GB | 2560 | 80, all | DGX |
@@ -183,7 +183,7 @@ with safe_open(f"results/<a>/embeddings/esmc_300m/{part['file']}", framework="nu
 | 03_embed esm2_t6/t12/t30 | 2 | 4 GB | 60–120 min | 2 cores: producer and writer threads beside the GPU loop; memory: CUDA/torch runtime (~3 GB) + checkpoint while loading; chunk buffers ≤ `flush_mb`, independent of set size |
 | 03_embed esmc_300m | 2 | 6 GB | 120 min | as above |
 | 03_embed esm2_t33_650M, esmc_600m, esm3, prott5 | 2 | 8 GB | 240–480 min | as above (2.3–5.5 GB checkpoints) |
-| 03_embed esm2_t36_3B, prostt5, esmc_6b | 2 | 16 GB | 240–720 min | 11–11.4 GB checkpoints; 6B loads one 5 GB shard at a time |
+| 03_embed esm2_t36_3B, prostt5, esmc_6b | 2 | 16 GB | 240–720 min | ProstT5 11.3 GB and ESM2 3B 5.7 GB checkpoints; 6B loads one 5 GB shard at a time |
 
 The user approved these asks (2026-11-14). After the first runs, memory and time are learned from `sacct` (OOM or timeout doubles the ask).
 

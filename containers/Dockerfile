@@ -38,7 +38,7 @@ RUN /opt/conda/envs/mp/bin/python -m venv --system-site-packages "$ENVS/esm-fair
     && [ "$(git -C /opt/src/fair-esm rev-parse HEAD)" = "$FAIR_ESM_COMMIT" ] \
     && "$ENVS/esm-fair/bin/pip" install -q --no-deps /opt/src/fair-esm
 
-RUN apt-get update -q && apt-get install -y -q --no-install-recommends gcc libc6-dev \
+RUN apt-get update -q && apt-get install -y -q --no-install-recommends gcc libc6-dev curl ca-certificates \
     && /opt/conda/envs/mp/bin/python -m venv "$ENVS/dadapy" \
     && if [ -s /tmp/dadapy.lock.txt ]; then "$ENVS/dadapy/bin/pip" install -q --no-deps -r /tmp/dadapy.lock.txt && "$ENVS/dadapy/bin/pip" install -q --no-deps "$(grep '^dadapy @' /tmp/dadapy.txt)"; \
        else "$ENVS/dadapy/bin/pip" install -q -r /tmp/dadapy.txt; fi \

@@ -5,11 +5,31 @@ import re
 from types import SimpleNamespace
 import numpy as np
 import torch
-from transformers import T5EncoderModel, T5Tokenizer
+from transformers import T5Config, T5EncoderModel, T5Tokenizer
 from backends import torch_dtype
 RARE_RE = re.compile(r"[UZOB]")
 PROST_PREFIX = "<AA2fold>"
 ###################################### HELPER_FUNCTIONS
+def read_state(files: Path) -> dict[str, torch.Tensor]:
+    """Memory-mapped state dict of the snapshot (safetensors, else pytorch_model*.bin), no accelerate needed."""
+    sd = {}
+    parts = sorted(files.glob("*.safetensors"))
+    if parts:
+        from safetensors.torch import load_file
+        for f in parts: sd.update(load_file(str(f)))
+        return sd
+    for f in sorted(files.glob("pytorch_model*.bin")): sd.update(torch.load(f, map_location="cpu", mmap=True, weights_only=True))
+    if not sd: raise FileNotFoundError(f"no safetensors or pytorch_model*.bin in {files}")
+    return sd
+def load_encoder(files: Path, dt: torch.dtype) -> T5EncoderModel:
+    """Encoder built on the meta device and filled tensor by tensor in the target dtype (peak memory about the final model, not model plus checkpoint)."""
+    with torch.device("meta"): model = T5EncoderModel(T5Config.from_pretrained(str(files)))
+    sd = {k: v.to(dt) for k, v in read_state(files).items() if k.startswith("encoder.") or k == "shared.weight"}
+    sd.setdefault("shared.weight", sd.get("encoder.embed_tokens.weight")); sd.setdefault("encoder.embed_tokens.weight", sd["shared.weight"])
+    missing, _ = model.load_state_dict(sd, strict=False, assign=True)
+    model.tie_weights()
+    if missing: raise RuntimeError(f"missing weights in {files}: {missing[:5]}")
+    return model
 def load(spec: dict, files: Path, device: torch.device, dtype: str) -> SimpleNamespace:
     """Load the T5 encoder and its sentencepiece tokenizer from the local snapshot.
 
@@ -25,7 +45,7 @@ def load(spec: dict, files: Path, device: torch.device, dtype: str) -> SimpleNam
     prost = spec["family"] == "prostt5"
     tok = T5Tokenizer.from_pretrained(str(files), do_lower_case=False, legacy=True)
     dt, name = torch_dtype(dtype, device, half="fp16")
-    model = T5EncoderModel.from_pretrained(str(files), torch_dtype=dt, low_cpu_mem_usage=True).to(device).eval()
+    model = load_encoder(files, dt).to(device).eval()
     skip = 1 if prost else 0
     n = model.config.num_layers
     def residues(seqs: list[str], layers: list[int]) -> dict[int, list[np.ndarray]]:

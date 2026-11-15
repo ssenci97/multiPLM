@@ -27,7 +27,7 @@
   <section id="tab-samples" role="tabpanel" aria-label="Samples">
     <div class="toolbar">
       <button id="toggle-info" type="button" class="pill black" aria-expanded="true" aria-controls="info">Hide info</button>
-      <label class="sr" for="example">Example</label><select id="example" class="inline" title="Show an example (read-only)"></select>
+      <label class="sr" for="example">Example</label><select id="example" class="inline" title="Load an example into editable cards, or all of them read-only"></select><button id="clear" type="button" class="pill red" title="Empty all cards (nothing is saved until you click Save samples)">✕ Clear</button>
     </div>
     <div id="info" class="card info"></div>
     <div id="samples"></div>
@@ -36,7 +36,6 @@
       <p id="backend-why" class="muted small"></p></div>
     <div class="toolbar">
       <button id="add" type="button" class="pill">＋ Add sample</button>
-      <button id="clear" type="button" class="pill plain" title="Empty all cards (nothing is saved until you click Save samples)">Clear</button>
       <button id="reload" type="button" class="pill plain">Load saved</button>
       <span class="grow"></span>
       <button id="save" type="button" class="pill blue">✓ Save samples</button>

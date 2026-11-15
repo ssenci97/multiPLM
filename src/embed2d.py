@@ -50,6 +50,13 @@ def umap_2d(X: np.ndarray, n_neighbors: int) -> np.ndarray:
     """UMAP with the neighbour count clamped below the point count."""
     import umap
     return umap.UMAP(n_components=2, n_neighbors=min(n_neighbors, len(X) - 1), random_state=SEED).fit_transform(X)
+def umap_ok() -> bool:
+    """Whether umap-learn imports in this environment."""
+    try:
+        import umap
+        return True
+    except Exception:
+        return False
 def rounded(Y: np.ndarray) -> list[list[float]]:
     """Coordinates rounded for the aggregates file."""
     return np.asarray(Y, dtype=np.float64).round(3).tolist()
@@ -61,7 +68,8 @@ def main() -> None:
         if args.yaml_out: return
         parser.error("--manifest and --out are required")
     m, out, want = json.loads(Path(args.manifest).read_text()), [], set(args.methods.split(","))
-    log(f"{args.methods}, scikit-learn {importlib.metadata.version('scikit-learn')}, umap-learn {importlib.metadata.version('umap-learn')}, seed {SEED}")
+    if "umap" in want and not umap_ok(): want.discard("umap"); log("!! umap-learn is missing or broken in this image (rebuild and pull the image of this commit): UMAP skipped, t-SNE continues")
+    log(f"{','.join(sorted(want))}, scikit-learn {importlib.metadata.version('scikit-learn')}, seed {SEED}")
     for t in m["tasks"]:
         X = np.asarray(np.load(t["path"]), dtype=np.float64)
         if len(X) >= args.max_points or len(X) < MIN_POINTS: out.append(dict(name=t["name"], points=len(X), skipped=f"n >= {args.max_points}" if len(X) >= args.max_points else f"n < {MIN_POINTS}")); continue

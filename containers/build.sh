@@ -147,7 +147,7 @@ orfeo() {
   [ -s "$digests" ] && ref="$(sed -n 's/^MP_IMAGE_REF=//p' "$digests" | tail -1)"
   log "on the cluster, from the repo root:"
   log "  srun -p THIN --mem=16G -c 4 --time=01:00:00 containers/build.sh pull"
-  log "  srun -p DGX --gres=gpu:A100:1 -c 1 --mem=4G --time=00:15:00 containers/build.sh test --gpu"
+  log "  srun -p DGX --gres=gpu:A100:1 -n 1 -c 1 --mem=4G --time=00:15:00 containers/build.sh test --gpu"
   log "  manual pull: module load singularity; singularity pull --force $sif docker://$ref"
   log "  then: python3 src/pipeline.py <analysis> --dry-run, or the console: python3 src/gui_serve.py"
 }

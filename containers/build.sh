@@ -128,6 +128,9 @@ pull() {
   export SINGULARITY_CACHEDIR="${SINGULARITY_CACHEDIR:-$MP_ROOT/.singularity}" APPTAINER_CACHEDIR="${SINGULARITY_CACHEDIR:-$MP_ROOT/.singularity}"
   export SINGULARITY_TMPDIR="${SINGULARITY_TMPDIR:-$SINGULARITY_CACHEDIR/tmp}"; export APPTAINER_TMPDIR="$SINGULARITY_TMPDIR"
   mkdir -p "$SINGULARITY_TMPDIR"
+  if [ -z "${SINGULARITY_DOCKER_USERNAME:-}" ] && [ -t 0 ]; then read -rp "[SLURM-INFO] ghcr.io username (empty = anonymous, public image only): " SINGULARITY_DOCKER_USERNAME || true; fi
+  if [ -n "${SINGULARITY_DOCKER_USERNAME:-}" ] && [ -z "${SINGULARITY_DOCKER_PASSWORD:-}" ] && [ -t 0 ]; then read -rsp "[SLURM-INFO] ghcr.io token for $SINGULARITY_DOCKER_USERNAME (read:packages): " SINGULARITY_DOCKER_PASSWORD || true; echo; fi
+  if [ -n "${SINGULARITY_DOCKER_USERNAME:-}" ] && [ -n "${SINGULARITY_DOCKER_PASSWORD:-}" ]; then export SINGULARITY_DOCKER_USERNAME SINGULARITY_DOCKER_PASSWORD APPTAINER_DOCKER_USERNAME="$SINGULARITY_DOCKER_USERNAME" APPTAINER_DOCKER_PASSWORD="$SINGULARITY_DOCKER_PASSWORD"; log "registry login as $SINGULARITY_DOCKER_USERNAME"; else unset SINGULARITY_DOCKER_USERNAME SINGULARITY_DOCKER_PASSWORD; log "anonymous registry access (no username/token)"; fi
   avail=$(df -Pk "$MP_ROOT" | awk 'NR==2{print int($4/1048576)}')
   log "pulling $ref into $MP_ROOT/$sif (cache $SINGULARITY_CACHEDIR, ${avail} GB free here)"
   [ "$avail" -lt "$need_gb" ] && { log "!! only ${avail} GB free; the CUDA image needs about ${need_gb} GB (layer cache + sif). Free space or set MP_PULL_GB"; exit 1; }

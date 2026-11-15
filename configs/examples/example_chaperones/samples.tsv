@@ -1,0 +1,4 @@
+sample_id	fasta_path	uniprot_query	description
+sHSP		xref:pfam-PF00011 AND reviewed:true	small heat-shock proteins (Pfam PF00011), Swiss-Prot, all species
+HSP70		xref:pfam-PF00012 AND reviewed:true AND taxonomy_id:2759	HSP70 chaperones (Pfam PF00012), Swiss-Prot, eukaryotes
+HSP90		xref:pfam-PF00183 AND reviewed:true AND taxonomy_id:2759	HSP90 chaperones (Pfam PF00183), Swiss-Prot, eukaryotes

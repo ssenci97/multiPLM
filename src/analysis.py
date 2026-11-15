@@ -21,6 +21,8 @@ ID_RE = re.compile(r"^[A-Za-z0-9_]+$")
 FASTA_EXT = (".fa", ".faa", ".fasta", ".fas")
 COLUMNS = ["sample_id", "fasta_path", "uniprot_query", "description"]
 UNIPROT_DIR = "data/uniprot"
+MAX_PROTEINS_SAMPLE = 100000
+MAX_PROTEINS_ANALYSIS = 200000
 ###################################### HELPER_FUNCTIONS
 def log(m: str) -> None:
     """Print a tagged log line."""
@@ -93,7 +95,7 @@ def create(name: str, root: str = ROOT, src: str | None = None) -> tuple[str, bo
     P = load_yaml(f"{base}/param_configs.yaml"); reviewed = bool((P.get("prefetch") or {}).get("reviewed_only", False))
     errs = validate([{**meta(r["sample_id"]), **r} for r in rows]) + validate_params(P, root)
     up = {r["sample_id"]: uniprot_file(root, r["sample_id"], r["uniprot_query"], reviewed) for r in rows if (r.get("uniprot_query") or "").strip()}
-    errs += [f"{sid}: UniProt query not downloaded yet: run python3 src/prefetch.py{' --samples ' + os.path.relpath(base, root) + '/samples.tsv' if src else ''} on a login node" for sid, p in up.items() if not (os.path.isfile(p) and os.path.isfile(p[:-6] + ".json"))]
+    errs += [f"{sid}: UniProt query not downloaded yet: click Run in the console, or run python3 src/prefetch.py{' --samples ' + os.path.relpath(base, root) + '/samples.tsv --yaml-in ' + os.path.relpath(base, root) + '/param_configs.yaml' if src else ''} on a login node" for sid, p in up.items() if not (os.path.isfile(p) and os.path.isfile(p[:-6] + ".json"))]
     if errs: return a, False, errs
     tmp = f"{inp}.tmp"; shutil.rmtree(tmp, ignore_errors=True); os.makedirs(f"{tmp}/samples")
     cols = list(dict.fromkeys(COLUMNS + [c for r in rows for c in r]))

@@ -1,5 +1,6 @@
 prefetch:
   reviewed_only: false
+  max_entries: 0
 prepare:
   min_length: 1
   max_length: 0

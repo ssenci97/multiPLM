@@ -1,0 +1,2 @@
+title: 'Molecular chaperones: do protein embeddings tell apart small heat-shock proteins, HSP70 and HSP90, three families that help other proteins fold? (3 Swiss-Prot queries downloaded on Run, ESMC-300M, all layers, dedup, TWO-NN and PCA)'
+credit: 'UniProtKB/Swiss-Prot (CC BY 4.0), downloaded by the console when you click Run (src/prefetch.py, at most 500 entries per sample; 50-1022 residues kept). On 2026-11-15 (release 2026_04) the queries returned sHSP 381, HSP70 319 and HSP90 101 entries; live counts can drift with each UniProt release'

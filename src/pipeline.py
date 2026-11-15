@@ -152,10 +152,11 @@ def estimate(name: str, root: str = ROOT) -> dict:
     """Size of the final embeddings: proteins x (mean: dim | tokens: residues x dim) x layers x bytes, per sample and backend, against embed.size_warn_gb / size_cap_gb."""
     inp = f"{root}/results/{name}/inputs"
     P = analysis.load_yaml(f"{inp}/params.yaml"); E = {**EMBED, **(P.get("embed") or {})}
-    tools = backends_mod.registry(f"{inp}/tools.tsv"); rows = []
+    tools = backends_mod.registry(f"{inp}/tools.tsv"); rows, counts = [], {}
     nbytes = 2 if E["store_dtype"] == "float16" else 4
     for r in analysis.read_sheet(f"{inp}/samples.tsv"):
         L = lengths_of((r.get("fasta_path") or "").strip() or f"{inp}/uniprot/{r['sample_id']}.fasta")
+        counts[r["sample_id"]] = len(L)
         for b in E["backends"]:
             spec = tools[b]; layers = backends_mod.resolve_layers(spec, E["layers"])
             lim = min([x for x in (1022 if spec["family"] == "esm2" else 0, int(E["max_length"])) if x] or [0])
@@ -163,13 +164,17 @@ def estimate(name: str, root: str = ROOT) -> dict:
             pools = [backends_mod.poolings(E["pooling"], k, spec["n_layers"]) for k in layers]
             gb = (len(L) * sum("mean" in p for p in pools) + res * sum("tokens" in p for p in pools)) * spec["dim"] * nbytes / 1e9
             rows.append(dict(sample=r["sample_id"], backend=b, proteins=len(L), residues=res, layers=len(layers), dim=spec["dim"], gb=round(gb, 3)))
-    total = round(sum(x["gb"] for x in rows), 3)
-    return dict(rows=rows, total_gb=total, warn_gb=float(E["size_warn_gb"]), cap_gb=float(E["size_cap_gb"]), level="refuse" if total > float(E["size_cap_gb"]) else "warn" if total > float(E["size_warn_gb"]) else "ok")
+    total, n_all = round(sum(x["gb"] for x in rows), 3), sum(counts.values())
+    hard = [f"sample {s}: {n:,} proteins exceed the hard cap of {analysis.MAX_PROTEINS_SAMPLE:,} per sample" for s, n in counts.items() if n > analysis.MAX_PROTEINS_SAMPLE]
+    if n_all > analysis.MAX_PROTEINS_ANALYSIS: hard.append(f"analysis: {n_all:,} proteins exceed the hard cap of {analysis.MAX_PROTEINS_ANALYSIS:,} per analysis")
+    return dict(rows=rows, proteins=counts, proteins_total=n_all, hard=hard, total_gb=total, warn_gb=float(E["size_warn_gb"]), cap_gb=float(E["size_cap_gb"]), level="refuse" if hard or total > float(E["size_cap_gb"]) else "warn" if total > float(E["size_warn_gb"]) else "ok")
 def check_size(name: str, root: str, allow_large: bool) -> dict:
-    """Print the size estimate; refuse above the hard cap unless allow_large."""
+    """Print the size estimate; refuse above the protein hard caps always, and above the size cap unless allow_large."""
     est = estimate(name, root)
     for x in est["rows"]: log(f"size {x['sample']} {x['backend']}: {x['proteins']:,} proteins, {x['residues']:,} residues, {x['layers']} layer(s) x {x['dim']} -> {x['gb']:.3f} GB")
     log(f"estimated embeddings: {est['total_gb']:.3f} GB (warn above {est['warn_gb']} GB, refuse above {est['cap_gb']} GB)")
+    log(f"proteins: {est['proteins_total']:,} in {len(est['proteins'])} sample(s) (hard cap {analysis.MAX_PROTEINS_SAMPLE:,} per sample, {analysis.MAX_PROTEINS_ANALYSIS:,} per analysis)")
+    if est["hard"]: raise ValueError("; ".join(est["hard"]) + " (hard cap: --allow-large does not apply; split the data into smaller analyses)")
     if est["level"] == "warn": log(f"!! large output: {est['total_gb']:.1f} GB")
     if est["level"] == "refuse" and not allow_large: raise ValueError(f"estimated embeddings {est['total_gb']:.1f} GB exceed embed.size_cap_gb {est['cap_gb']} GB: reduce layers/tokens, use float16, or pass --allow-large")
     return est

@@ -1,5 +1,6 @@
 """Console: start gui_serve.py on a free port in a repo copy with fake SLURM commands and exercise every API endpoint."""
-import json, os, socket, subprocess, sys, time, urllib.error, urllib.request
+import json, os, socket, subprocess, sys, threading, time, urllib.error, urllib.parse, urllib.request
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 import yaml
 
@@ -30,7 +31,7 @@ def test_every_endpoint(server):
     for path in ("/", "/submit.css", "/submit.js"): assert get(base, path)[0] == 200
     js = lambda p: json.loads(get(base, p)[1])
     assert js("/api/schema")["sheet_columns"][:3] == ["sample_id", "fasta_path", "uniprot_query"]
-    assert [e["name"] for e in js("/api/examples")["examples"]] == ["example_kinase_gpcr", "example_toy"]
+    assert [e["name"] for e in js("/api/examples")["examples"]] == ["example_chaperones", "example_kinase_gpcr", "example_toy"]
     b = js("/api/backends"); assert b["selected"] == ["esmc_300m"] and all(x["weights"] == "missing" for x in b["backends"])
     assert {x["name"]: x["partition"] for x in b["backends"]}["esmc_6b"] == "DGX"
     assert js("/api/params")["embed"]["backends"] == ["esmc_300m"]
@@ -56,3 +57,42 @@ def test_every_endpoint(server):
     assert post(base, "/api/stop_all", {})[0] == 200
     assert js("/api/results?analysis=ex_toy")["backends"] == ["esmc_300m"] and js("/api/results?analysis=ex_kinase_gpcr")["backends"] == ["esm2_t6_8M", "esmc_300m"]
     assert "throughput" in js("/api/perf")
+
+def fake_uniprot(repo, counts):
+    """A local stand-in for rest.uniprot.org (one page per query, count chosen by Pfam id); the repo copy's prefetch.py is pointed at it."""
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a): pass
+        def do_GET(self):
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)["query"][0]
+            pf, n = next((k, v) for k, v in counts.items() if k in q)
+            body = "".join(f">sp|Q{i:05d}|{pf}_{i} chaperone\nMKV{'AGLE' * 30}\n" for i in range(min(n, 500))).encode()
+            self.send_response(200)
+            for k, v in (("x-total-results", str(n)), ("x-uniprot-release", "2026_04"), ("x-uniprot-release-date", "04-November-2026"), ("Content-Length", str(len(body)))): self.send_header(k, v)
+            self.end_headers(); self.wfile.write(body)
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
+    p = repo / "src" / "prefetch.py"; p.write_text(p.read_text().replace("https://rest.uniprot.org/uniprotkb/search", f"http://127.0.0.1:{srv.server_port}/search"))
+    return srv
+
+def test_uniprot_example_downloads_on_run_and_plans_every_step(server):
+    base, repo, fb = server
+    srv = fake_uniprot(repo, {"PF00011": 381, "PF00012": 319, "PF00183": 101})
+    try:
+        code, r = post(base, "/api/run", dict(analysis="ch", examples=["example_chaperones"]))
+        assert code == 200 and r["members"] == ["ch_chaperones"], r
+        a = repo / "results" / "ch_chaperones"
+        assert sorted(p.name for p in (a / "inputs" / "uniprot").glob("*.fasta")) == ["HSP70.fasta", "HSP90.fasta", "sHSP.fasta"]
+        assert (a / "inputs" / "uniprot" / "sHSP.fasta").read_text().count(">") == 381 and "prefetch.py" in (a / "run.log").read_text()
+        st = json.loads(get(base, "/api/status?analysis=ch_chaperones")[1])
+        assert {s["step"]: s["total"] for s in st["steps"]} == {"00_weights": 1, "01_prepare": 3, "02_dedup": 3, "03_embed": 3, "04_merge": 3, "05_summary": 1}
+        assert st["size"]["proteins"] == {"sHSP": 381, "HSP70": 319, "HSP90": 101} and st["size"]["hard"] == []
+        assert len((fb / "sbatch.log").read_text().splitlines()) == 14
+    finally: srv.shutdown()
+
+def test_uniprot_example_above_the_count_cap_saves_and_submits_nothing(server):
+    base, repo, fb = server
+    srv = fake_uniprot(repo, {"PF00011": 381, "PF00012": 501, "PF00183": 101})
+    try:
+        code, r = post(base, "/api/run", dict(analysis="ch", examples=["example_chaperones"]))
+        assert code == 400 and "HSP70: 501 entries exceed the prefetch.max_entries of 500" in r["errors"][0] and "nothing was saved" in r["errors"][0], r
+        assert not (repo / "data" / "uniprot" / "HSP70").exists() and not (repo / "results" / "ch_chaperones" / "inputs").exists() and not (fb / "sbatch.log").exists()
+    finally: srv.shutdown()

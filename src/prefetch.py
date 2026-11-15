@@ -24,6 +24,7 @@ YAML_PATH = "configs/param_configs.yaml"
 SCRIPT_KEY = "prefetch"
 SAMPLES_TSV = "configs/samples.tsv"
 REVIEWED_ONLY = False
+MAX_ENTRIES = 0
 SEARCH_URL = "https://rest.uniprot.org/uniprotkb/search"
 PAGE_SIZE = 500
 ACCESSIONS_PER_QUERY = 100
@@ -36,11 +37,12 @@ ACC_RE = re.compile(r"^[A-Z0-9]{6,10}(-\d+)?$")
 parser = argparse.ArgumentParser(description="Pre-download UniProtKB FASTA for the samples that use a query")
 parser.add_argument("--samples", type=str, default=SAMPLES_TSV, help="Sample sheet (configs/samples.tsv or an example's samples.tsv)")
 parser.add_argument("--reviewed_only", action=argparse.BooleanOptionalAction, default=REVIEWED_ONLY, help="Add reviewed:true (Swiss-Prot) to every query")
+parser.add_argument("--max_entries", type=int, default=MAX_ENTRIES, help="Refuse a sample above this many entries before saving anything (0: only the hard cap)")
 parser.add_argument("--force", action="store_true", help="Download again even when a file for the same query exists")
 parser.add_argument("--yaml-in", nargs="?", const=YAML_PATH, default=YAML_PATH)
 parser.add_argument("--yaml-out", nargs="?", const=YAML_PATH, default=None)
 cli_preview, _ = parser.parse_known_args()
-params = dict(reviewed_only=REVIEWED_ONLY)
+params = dict(reviewed_only=REVIEWED_ONLY, max_entries=MAX_ENTRIES)
 if cli_preview.yaml_in and Path(cli_preview.yaml_in).exists():
     config_data = yaml.safe_load(Path(cli_preview.yaml_in).read_text()) or {}
     params.update({k: v for k, v in (config_data.get(SCRIPT_KEY) or {}).items() if k in params})
@@ -78,15 +80,20 @@ def fetch(url: str) -> tuple[str, dict]:
         log(f"UniProt {reason}, retry {attempt}/{HTTP_RETRIES - 1} in {HTTP_BACKOFF * 2 ** (attempt - 1)} s")
         time.sleep(HTTP_BACKOFF * 2 ** (attempt - 1))
     raise RuntimeError("unreachable")
-def download(qs: list[str]) -> tuple[str, list[dict]]:
-    """Page through every query; each must return its announced x-total-results entries."""
-    body, info = [], []
+def download(qs: list[str], limit: int = 0) -> tuple[str, list[dict]]:
+    """Page through every query, refusing above the cap before saving and on incomplete pages."""
+    body, info, grand = [], [], 0
+    cap, what = (limit, "prefetch.max_entries") if 0 < limit < analysis.MAX_PROTEINS_SAMPLE else (analysis.MAX_PROTEINS_SAMPLE, "hard cap")
     for q in qs:
         url = first = f"{SEARCH_URL}?query={urllib.parse.quote(q, safe='')}&format=fasta&size={PAGE_SIZE}"
         n, total = 0, None
         while url:
             text, h = fetch(url)
             total, release, date = total or h.get("x-total-results"), h.get("x-uniprot-release"), h.get("x-uniprot-release-date")
+            if n == 0:
+                if total is None: raise RuntimeError(f"UniProt did not announce x-total-results for {q!r}: the hard cap cannot be checked (nothing was saved)")
+                grand += int(total)
+                if grand > cap: raise ValueError(f"{grand:,} entries exceed the {what} of {cap:,} proteins per sample: narrow the query (nothing was saved)")
             body.append(text); n += text.count("\n>") + text.startswith(">")
             m = re.search(r'<([^>]+)>;\s*rel="next"', h.get("link", ""))
             url = m.group(1) if m else None
@@ -106,7 +113,7 @@ def main() -> None:
         out = Path(analysis.uniprot_file(str(ROOT), sid, text, args.reviewed_only))
         if out.is_file() and out.with_suffix(".json").is_file() and not args.force: log(f"{sid}: already downloaded ({out.relative_to(ROOT)})"); continue
         log(f"{sid}: {text.strip()[:120]}")
-        try: body, info = download(queries(text, args.reviewed_only))
+        try: body, info = download(queries(text, args.reviewed_only), args.max_entries)
         except (ValueError, RuntimeError) as e: sys.exit(f"[PYTHON-INFO] !! {sid}: {e}")
         out.parent.mkdir(parents=True, exist_ok=True)
         tmp = out.with_name(out.name + ".tmp"); tmp.write_text(body); os.replace(tmp, out)

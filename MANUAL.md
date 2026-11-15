@@ -62,7 +62,7 @@ ORFEO facts from orfeo-doc.areasciencepark.it (read 2026-11-14):
 | `configs/tools.tsv` | software pins (git SHAs, MMseqs2, DADApy sdist sha256) and weight pins (HF revisions, dim, layer count) |
 | `configs/checksums/<backend>.sha256` | tracked reference checksums (you add them, §14) |
 | `configs/param_configs.yaml` | one section per script: `prefetch`, `prepare`, `dedup`, `embed`, `merge`, `summarize`, `slurm`, `gui_serve` |
-| `configs/examples/` | `example_toy` (2 × 5 proteins, `esmc_300m`, defaults) and `example_kinase_gpcr` (2 × 250 Swiss-Prot proteins, `esm2_t6_8M` + `esmc_300m`, all layers, dedup, TWO-NN and PCA on) |
+| `configs/examples/` | `example_toy` (2 × 5 proteins, `esmc_300m`, defaults) and `example_kinase_gpcr` (2 × 250 Swiss-Prot proteins, `esm2_t6_8M` + `esmc_300m`, all layers, dedup, TWO-NN and PCA on) and `example_chaperones` (3 Swiss-Prot UniProtKB queries downloaded when you click Run: small heat-shock proteins PF00011, HSP70 PF00012 and HSP90 PF00183 of eukaryotes; `esmc_300m`, all layers, dedup, TWO-NN and PCA on; at most 500 entries per sample, 50–1022 residues kept) |
 | `src/` | steps `00_`–`05_*.sh`, `mp_job.sh`, `common.sh`; Python: `analysis`, `pipeline`, `prefetch`, `weights`, `prepare`, `dedup`, `embed`, `merge`, `summarize`, `intrinsic_dim` (runs in the dadapy env), `store`, `sample_meta`, `gui_serve`, `backends/` |
 | `data/models/<backend>/` | `files/`, `CHECKSUMS`, `SOURCE.json`, shared by all analyses |
 | `data/uniprot/<sample>/` | prefetched FASTA + provenance JSON |
@@ -109,12 +109,13 @@ results/<analysis>/
 |---|---|
 | `sample_id` | letters, digits, underscore; unique |
 | `fasta_path` | absolute path to a `.fa .faa .fasta .fas` file (examples may use paths relative to their folder) |
-| `uniprot_query` | instead of a FASTA: a UniProtKB query, or `accessions:P69905,P68871,…`; downloaded beforehand with `prefetch.py` |
+| `uniprot_query` | instead of a FASTA: a UniProtKB query, or `accessions:P69905,P68871,…`; the console downloads it on its own host (`prefetch.py`) when you click Run, before the inputs are frozen; already downloaded queries are reused |
 | `description` | free text |
 
 | Key | Default | Meaning |
 |---|---|---|
 | `prefetch.reviewed_only` | false | add `reviewed:true` (Swiss-Prot) to every query |
+| `prefetch.max_entries` | 0 | refuse a sample whose query announces more entries, after the first page and before anything is saved (0: only the hard cap below; it can only lower the hard cap). UniProt counts change between releases, so a query near the limit can start failing later |
 | `dedup.enabled`, `scope` | false, sample | MMseqs2 dedup, per sample or across samples (`joint`) |
 | `dedup.mode`, `min_seq_id`, `coverage`, `cov_mode` | easy-linclust, 0.95, 0.8, 0 | MMseqs2 settings (`easy-cluster` also allowed) |
 | `embed.backends` | `[esmc_300m]` | backends to run (several allowed) |
@@ -124,6 +125,7 @@ results/<analysis>/
 | `embed.shard_proteins` | 25000 | proteins per shard job |
 | `embed.flush_proteins`, `flush_mb` | 2000, 256 | write a chunk after this many proteins or MB |
 | `embed.size_warn_gb`, `size_cap_gb` | 50, 500 | warn above, refuse above unless `--allow-large` |
+| hard protein caps | 100 000 per sample, 200 000 per analysis | not a parameter: `MAX_PROTEINS_SAMPLE` and `MAX_PROTEINS_ANALYSIS` in `src/analysis.py`. `prefetch.py` refuses a UniProt query above the sample cap before downloading anything; `pipeline.py` (also `--dry-run` and the console size line) refuses a sample or an analysis above them. `--allow-large` does not apply |
 | `embed.batch_tokens`, `max_length`, `dtype`, `verify_weights` | 4096, 0, auto, full | padded tokens per batch; truncation; compute precision; sha256 of the weights before every shard |
 | `merge.max_part_gb`, `keep_chunks` | 20, false | row-split the final file above this size; keep chunk files |
 | `summarize.twonn.*` | enabled false; max_points 10000; mu_fraction 0.9; n_min 20; metric euclidean; tokens true | §12 |
@@ -166,7 +168,7 @@ with safe_open(f"results/<a>/embeddings/esmc_300m/{part['file']}", framework="nu
 
 | Task | Command |
 |---|---|
-| Download UniProt samples (login node) | `python3 src/prefetch.py` (or `--samples configs/examples/<x>/samples.tsv`) |
+| Download UniProt samples (login node) | automatic when you click Run in the console; by hand: `python3 src/prefetch.py` (or `--samples configs/examples/<x>/samples.tsv --yaml-in configs/examples/<x>/param_configs.yaml`) |
 | Create from the saved sheet / an example | `python3 src/analysis.py <name>` / `python3 src/analysis.py <name> --example example_kinase_gpcr` |
 | See what would run, with the size estimate | `python3 src/pipeline.py <name> --dry-run` |
 | Submit | `python3 src/pipeline.py <name>` (`--allow-large` above the size cap; `--online-here` to download the weights on this host first) |
@@ -237,10 +239,12 @@ The user approved these asks (2026-11-14). After the first runs, memory and time
 | Check | Result (2026-11-14, laptop, no GPU, no image) |
 |---|---|
 | `bash -n` on all scripts | pass |
-| `pytest tests/` (fake `sbatch`, `squeue`, `sacct`, `scancel`, `sinfo`, `singularity`, `mmseqs`; fake numpy backend; stub DADApy) | 65 passed. Covered: pins and weight checksums; layer and pooling validation; batching and shards; chunk atomicity, fsync and resume (also after an unreadable last chunk); streaming merge with id order and lazy reads; a killed shard resumes identically; changed settings, a different compute dtype, non-finite values, a backend shape that disagrees with `tools.tsv`, and tampered weights all stop the job; a failed writer cannot hang the job; bf16 detection ignores emulation; dedup; the DADApy wrapper (cap, cosine, duplicates, schema) and its missing-env error; summary tables, TWO-NN rows and PCA; plan, done rule, frozen inputs, UniProt freeze, size guard, GPU lane, launch and stop; every console endpoint |
-| Example dry runs (scratch copy) | `example_toy`: 8 jobs would run (1 weights, 2 prepare, 2 embed, 2 merge, 1 summary), estimate < 0.001 GB. `example_kinase_gpcr`: 15 jobs (2 weights, 2 prepare, 2 dedup, 4 embed, 4 merge, 1 summary), 0.062 GB; ESM2 sees 171 018 kinase residues against 194 473 for ESMC because of its 1022-residue truncation |
-| **Verified 2026-11-15** | image built from the lock files on the workstation (12.4 GB, digest in `containers/images.env`) and pulled as a 3.6 GB `.sif` on the cluster; smoke test of torch 2.4.1+cu121, esm-evo, esm-fair, MMseqs2 and DADApy 0.3.4 on a THIN node; `--nv` on a DGX A100-SXM4-40GB (CUDA 12.1, bf16 True, access for this account works); the paper benchmarks with the real DADApy (14.05, 2.12, 22.29, 0.05); downloads of the ten pinned weight sets with sha256 recorded in `configs/checksums/` |
-| **Not verified** | any real backend forward pass; real MMseqs2 on data; real SLURM submission by the pipeline; ESMC 6B weights (not downloaded); internet from compute nodes; the console page in a browser |
+| `pytest tests/` (fake `sbatch`, `squeue`, `sacct`, `scancel`, `sinfo`, `singularity`, `mmseqs`; fake numpy backend; stub DADApy) | 75 passed. Covered: pins and weight checksums; layer and pooling validation; batching and shards; chunk atomicity, fsync and resume (also after an unreadable last chunk); streaming merge with id order and lazy reads; a killed shard resumes identically; changed settings, a different compute dtype, non-finite values, a backend shape that disagrees with `tools.tsv`, and tampered weights all stop the job; a failed writer cannot hang the job; bf16 detection ignores emulation; dedup; the DADApy wrapper (cap, cosine, duplicates, schema) and its missing-env error; summary tables, TWO-NN rows and PCA; plan, done rule, frozen inputs, UniProt freeze, size guard, protein hard caps per sample and per analysis (`--allow-large` ignored), GPU lane, launch and stop; the UniProt prefetch refuses above the sample cap after the first page (also across accession chunks) and when `x-total-results` is missing, and `prefetch.max_entries` can only lower the cap; the console downloads the UniProt samples of `example_chaperones` on Run from a local stand-in server and plans all 14 jobs, and above `max_entries` it saves and submits nothing; every console endpoint |
+| Console in a browser (2026-11-15, workstation, scratch copy, fake SLURM commands, Firefox headless) | Samples, Run, Results and Performance at 1200 and 500 px, light and dark: no horizontal overflow (two Results tables were wrapped in a scroll box for 500 px), no badge overflow, no overlapping tick labels, no raw JSON cells, smallest text 13 px, one "no data yet" per empty table after repeated refreshes, Performance dark to the bottom of the window, Back restores the console. Run on `example_chaperones`: 14 jobs submitted to the fake `sbatch`, six step rows and the progress bar shown. Hard caps through the console (100 001 proteins in one sample; 200 001 in one analysis): refused with the message, nothing submitted |
+| `example_chaperones` UniProt sizes (real download, 2026-11-15, release 2026_04) | sHSP 381, HSP70 319, HSP90 101 entries; lengths 20–1002 residues, so `prepare` (50–1022) drops 3 short fragments and ESM2 would truncate none; exact duplicate copies of a sequence before dedup: sHSP 87, HSP70 14, HSP90 3 (MMseqs2 at 95 % identity was not run on them). Pfam names in the UniProt records: PF00011 HSP20, PF00012 HSP70, PF00183 HSP90 |
+| Example dry runs (scratch copy) | `example_toy`: 8 jobs would run (1 weights, 2 prepare, 2 embed, 2 merge, 1 summary), estimate < 0.001 GB. `example_chaperones` (console, real UniProt files): 14 jobs (1 weights, 3 prepare, 3 dedup, 3 embed, 3 merge, 1 summary), 0.093 GB, 801 proteins. `example_kinase_gpcr`: 15 jobs (2 weights, 2 prepare, 2 dedup, 4 embed, 4 merge, 1 summary), 0.062 GB; ESM2 sees 171 018 kinase residues against 194 473 for ESMC because of its 1022-residue truncation |
+| **Verified 2026-11-15** | image built from the lock files on the workstation (12.4 GB, digest in `containers/images.env`) and pulled as a 3.6 GB `.sif` on the cluster; smoke test of torch 2.4.1+cu121, esm-evo, esm-fair, MMseqs2 and DADApy 0.3.4 on a THIN node; `--nv` on a DGX A100-SXM4-40GB (CUDA 12.1, bf16 True, access for this account works); the paper benchmarks with the real DADApy (14.05, 2.12, 22.29, 0.05); downloads of the ten pinned weight sets with sha256 recorded in `configs/checksums/`, repeated on the cluster by `src/00_weights_array.sh` (identical checksums); `example_toy` end to end through `pipeline.py` on a DGX A100 (`esmc_300m`, 2 × 5 proteins, dim 960, bf16, no truncation, weight sha256 equal to the tracked reference); `example_kinase_gpcr` end to end (`esm2_t6_8M` fp32 and `esmc_300m` bf16, 2 × 250 Swiss-Prot proteins, MMseqs2 dedup, TWO-NN on all layers: 497 points per backend and layer, d from about 2 to 11; ESM2 truncated 73 of 497 proteins at its 1022-residue limit, ESMC none) |
+| **Not verified** | forward passes of ESM3, ProtT5, ProstT5 and the larger ESM2 sizes; ESMC 6B weights (not downloaded); PCA output and the aggregates were produced but not inspected; the console against the live cluster, including the UniProt download from a login node and a real run of `example_chaperones` (rendered only on the workstation with fake SLURM commands, see above) |
 
 ## 16. Troubleshooting
 
@@ -248,8 +252,10 @@ The user approved these asks (2026-11-14). After the first runs, memory and time
 |---|---|
 | `refusing to run outside the container image` | a step script was started by hand → use `pipeline.py` or the console |
 | `weights check failed` / `differs from the recorded CHECKSUMS` | the weights changed or differ from `configs/checksums/` → restore the archive; if intended, move the folder aside and download again |
-| `UniProt query not downloaded yet` | run `python3 src/prefetch.py` on a login node |
+| `UniProt query not downloaded yet` | click Run in the console, or run `python3 src/prefetch.py` on a login node |
+| `entries exceed the prefetch.max_entries of …` / `did not announce x-total-results` | the query is larger than the example or sheet allows, or UniProt did not report a count; nothing was saved for that sample → narrow the query (counts drift between UniProt releases) or raise `prefetch.max_entries` |
 | `exceed embed.size_cap_gb` | fewer layers or no tokens, float16, or `--allow-large` |
+| `exceed the hard cap of 100,000 per sample` / `200,000 per analysis` | narrow the query or split the data into several analyses; `--allow-large` cannot override it |
 | `only the last layer` (esm3) | ESM3 exposes only its final embeddings → `layers: [-1]` |
 | `chunk files … do not match the shard markers` | chunks were removed after an earlier merge → delete `<s>.shards/` and rerun |
 | `another analysis has live jobs downloading the same weights` | wait for it, then launch again |
@@ -261,7 +267,7 @@ The user approved these asks (2026-11-14). After the first runs, memory and time
 
 | Step | Action |
 |---|---|
-| 1 | Console › Samples: one card per sample, Local FASTA or UniProtKB query → Save samples; for queries run `prefetch.py` |
+| 1 | Console › Samples: one card per sample, Local FASTA or UniProtKB query → Save samples; queries are downloaded when you click Run |
 | 2 | Run › tick the backends → name the analysis → check the size line → Run on SLURM |
 | 3 | Results › table, records, aggregates by backend and layer, TWO-NN and PCA, weights, provenance |
 

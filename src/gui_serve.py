@@ -27,6 +27,7 @@ GUI, SCHEMA = f"{ROOT}/gui", f"{ROOT}/configs/sample_schema.json"
 SAMPLES_TSV, SAMPLES_DIR, EXAMPLES, RESULTS = f"{ROOT}/configs/samples.tsv", f"{ROOT}/configs/samples", f"{ROOT}/configs/examples", f"{ROOT}/results"
 STATIC = {"/": ("submit.html", "text/html"), "/submit.css": ("submit.css", "text/css"), "/submit.js": ("submit.js", "application/javascript")}
 DEFAULT_SIF, MP_BIN, PIPELINE = f"{ROOT}/containers/multiplm.sif", f"{ROOT}/.mp_bin", os.path.join(os.path.dirname(os.path.abspath(__file__)), "pipeline.py")
+PREFETCH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prefetch.py")
 FAILED = {"FAILED", "TIMEOUT", "OUT_OF_MEMORY", "NODE_FAIL", "BOOT_FAIL", "DEADLINE", "PREEMPTED"}
 RUNNING = {"RUNNING", "CONFIGURING", "COMPLETING"}
 FASTA_EXT = analysis.FASTA_EXT
@@ -172,8 +173,23 @@ def last_section(name: str) -> str:
     """The last launch section of results/<name>/run.log."""
     p = f"{RESULTS}/{name}/run.log"; t = open(p, errors="replace").read() if os.path.exists(p) else ""
     return t[t.rfind("\n===== ") + 1:] if "\n===== " in t else t
+def prefetch(name: str, base: str) -> list[str]:
+    """Download the missing UniProt samples of a new analysis; return the !! errors."""
+    a_dir = analysis.analysis_dir(name, ROOT)
+    if os.path.exists(f"{a_dir}/inputs/samples.tsv") or not any((r.get("uniprot_query") or "").strip() for r in tsv_rows(f"{base}/samples.tsv")): return []
+    cmd = ["python3", PREFETCH, "--samples", f"{base}/samples.tsv", "--yaml-in", f"{base}/param_configs.yaml"]
+    os.makedirs(a_dir, exist_ok=True)
+    with open(f"{a_dir}/run.log", "a") as fh:
+        fh.write(f"\n===== {datetime.datetime.now():%F %T} {' '.join(cmd)} =====\n"); fh.flush()
+        try: rc = subprocess.run(cmd, cwd=ROOT, stdout=fh, stderr=subprocess.STDOUT, timeout=600).returncode
+        except subprocess.TimeoutExpired: rc = -1; fh.write("[PYTHON-INFO] !! prefetch.py timed out\n")
+    if not rc: return []
+    return [l.split("!!", 1)[1].strip() for l in last_section(name).splitlines() if "!!" in l] or [f"prefetch.py exited with code {rc}"]
 def launch(name: str, src: str | None = None, group: str | None = None, online_here: bool = False, allow_large: bool = False) -> tuple[dict | None, object]:
-    """Freeze the analysis and run pipeline.py for it, appending to run.log; errors come from its !! lines."""
+    """Prefetch, freeze and submit one analysis; errors come from the !! lines of run.log."""
+    try: errs = prefetch(name, src or f"{ROOT}/configs")
+    except ValueError as e: return None, str(e)
+    if errs: return None, errs
     try: a_dir, new, errs = analysis.create(name, ROOT, src)
     except ValueError as e: return None, str(e)
     if errs: return None, errs

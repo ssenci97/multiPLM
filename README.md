@@ -13,7 +13,7 @@ The full protocol is in [MANUAL.md](MANUAL.md). Primary intended use is research
 ## Inputs and parameters
 - **`configs/samples.tsv`**, one row per sample, with columns:
   - `sample_id`;
-  - either `fasta_path` (an absolute path) or `uniprot_query` (a query, or `accessions:…`, downloaded beforehand with `python3 src/prefetch.py` on a login node);
+  - either `fasta_path` (an absolute path) or `uniprot_query` (a query, or `accessions:…`, downloaded by the console when you click Run, or beforehand with `python3 src/prefetch.py` on a login node);
   - `description`.
 - **`configs/param_configs.yaml`**, with these sections:
   - `embed`: backends, layers (`[-1]` or `all`), pooling (`mean` / `tokens`), `store_dtype`, size guard and sharding;
@@ -46,7 +46,7 @@ No state is shown by colour alone: each one has a glyph and a word (✓ ✕ ▶ 
 - There is one job per sample and step, and one per shard for embedding. Jobs are chained with `--dependency=afterok`.
 - All jobs go through `src/mp_job.sh`, which runs `singularity exec --cleanenv`. GPU jobs also get `--nv`.
 - Resources per job:
-  - CPU jobs: 1 core and 1 GB;
+  - CPU jobs: 1 core and 1 GB, except the summary, which asks for the size of the embeddings it loads plus 5 GB when TWO-NN is on;
   - embedding jobs: 2 cores and 4 to 16 GB depending on the backend.
 
   The user approved these asks; they are listed in MANUAL §11.
@@ -73,6 +73,7 @@ No state is shown by colour alone: each one has a glyph and a word (✓ ✕ ▶ 
 |---|---|
 | `example_toy` | 2 × 5 human proteins; `esmc_300m`, last layer |
 | `example_kinase_gpcr` | 2 × 250 human Swiss-Prot kinases and GPCRs (UniProtKB 2026_04, CC BY 4.0); `esm2_t6_8M` + `esmc_300m`, all layers; dedup, TWO-NN and PCA on |
+| `example_chaperones` | Three Swiss-Prot families that help other proteins fold: small heat-shock proteins (Pfam PF00011, all species), HSP70 (PF00012) and HSP90 (PF00183) of eukaryotes. The console downloads them from UniProtKB when you click Run, at most 500 entries per sample (381, 319 and 101 on 2026-11-15, release 2026_04; live counts drift between releases). `esmc_300m`, all layers; dedup, TWO-NN and PCA on; 14 jobs |
 
 ## Citation and credits
 - The intrinsic dimension is computed with **DADApy** (Glielmo et al. 2022, *Patterns* 3:100589, doi:10.1016/j.patter.2022.100589; Apache-2.0), which implements TWO-NN from **Facco E, d'Errico M, Rodriguez A, Laio A (2017) Sci Rep 7:12140, doi:10.1038/s41598-017-11873-y**. Thank you to the DADApy authors and the Laio group. The paper and its SI are in `docs/references/facco2017/` (CC BY 4.0).

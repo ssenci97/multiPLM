@@ -148,6 +148,21 @@ def test_size_estimate_warns_refuses_and_can_be_overridden(repo, fakebin):
     with pytest.raises(ValueError, match="size_cap_gb"): pipeline.submit("big", str(repo), dry_run=True)
     assert pipeline.submit("big", str(repo), dry_run=True, allow_large=True)
 
+def test_protein_hard_caps_cannot_be_overridden(repo, monkeypatch):
+    make(repo, backends=["esmc_300m"])
+    A = pipeline.analysis
+    assert (A.MAX_PROTEINS_SAMPLE, A.MAX_PROTEINS_ANALYSIS) == (100000, 200000)
+    assert pipeline.estimate("toy", str(repo))["hard"] == []
+    monkeypatch.setattr(A, "MAX_PROTEINS_SAMPLE", 4)
+    est = pipeline.estimate("toy", str(repo))
+    assert est["level"] == "refuse" and est["proteins"] == {"globins": 5, "small_proteins": 5} and len(est["hard"]) == 2
+    with pytest.raises(ValueError, match="hard cap"): pipeline.submit("toy", str(repo), dry_run=True, allow_large=True)
+    monkeypatch.setattr(A, "MAX_PROTEINS_SAMPLE", 5); monkeypatch.setattr(A, "MAX_PROTEINS_ANALYSIS", 9)
+    assert pipeline.estimate("toy", str(repo))["hard"] == ["analysis: 10 proteins exceed the hard cap of 9 per analysis"]
+    with pytest.raises(ValueError, match="per analysis"): pipeline.submit("toy", str(repo), dry_run=True, allow_large=True)
+    monkeypatch.setattr(A, "MAX_PROTEINS_ANALYSIS", 10)
+    assert pipeline.submit("toy", str(repo), dry_run=True)
+
 def test_dedup_jobs_sit_between_prepare_and_embed(repo):
     ex = repo / "configs" / "examples" / EXAMPLE
     for scope, expect in (("sample", ["dedup.globins", "dedup.small_proteins"]), ("joint", ["dedup"])):

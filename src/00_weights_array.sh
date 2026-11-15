@@ -19,10 +19,7 @@ log() { echo "[SLURM-INFO] $*"; }
 peak() { local rel f; rel=$(awk -F: '$1=="0"{print $3}' /proc/self/cgroup 2>/dev/null || true); for f in "/sys/fs/cgroup$rel/memory.peak" /sys/fs/cgroup/memory.peak; do [ -r "$f" ] && { awk '{printf "%.2f GB", $1/1073741824}' "$f"; return; }; done; echo "NA (see sacct)"; }
 ###################################### weights
 cd "$MP_ROOT"
-app="${MP_APPTAINER:-$(command -v singularity || command -v apptainer || true)}"
-[ -n "$app" ] || app="$(bash -lc 'module load singularity >/dev/null 2>&1; command -v singularity || command -v apptainer' 2>/dev/null || true)"
-[ -n "$app" ] || [ ! -x /opt/programs/singularity/4.3.1/bin/singularity ] || app=/opt/programs/singularity/4.3.1/bin/singularity
-[ -n "$app" ] || { log "no singularity/apptainer found on $(hostname): set MP_APPTAINER=/path/to/singularity before sbatch"; exit 1; }
+source "$MP_ROOT/src/find_app.sh"; app="$(find_app)"
 [ -s "$sif" ] || { log "$sif missing: run containers/build.sh pull first"; exit 1; }
 log "host $(hostname) | job ${SLURM_JOB_ID:-local}_${SLURM_ARRAY_TASK_ID} | backend $b | $app"
 "$app" exec --cleanenv --bind "$MP_ROOT" --pwd "$MP_ROOT" "$sif" /opt/conda/envs/mp/bin/python src/weights.py --backend "$b" --models_dir data/models --checksums_dir configs/checksums

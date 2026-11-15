@@ -1,10 +1,10 @@
 #!/bin/bash
 ###################################### dependencies
 set -euo pipefail
-command -v singularity >/dev/null || module load singularity
 ###################################### parameters
 script="$1"; shift
 cd "$MP_ROOT"
+source "$MP_ROOT/src/find_app.sh"; app="$(find_app)"
 MP_OUT="$MP_ROOT/results/$MP_ANALYSIS"
 T_START="$(date '+%F %T')"; S0=$SECONDS
 nv=(); [ "${MP_GPU:-0}" = 1 ] && nv=(--nv)
@@ -18,7 +18,7 @@ prefix+=" MP_ROOT=$(printf %q "$MP_ROOT") MP_OUT=$(printf %q "$MP_OUT") MP_IMAGE
 prefix+=" HF_HUB_OFFLINE=$offline TRANSFORMERS_OFFLINE=$offline HF_HOME=$(printf %q "$MP_ROOT/data/models/.hf_home") TORCH_HOME=$(printf %q "$MP_ROOT/data/models/.torch_home")$token_env"
 prefix+='; export HOME="$MP_ROOT" PYTHONNOUSERSITE=1 MPLBACKEND=Agg QT_QPA_PLATFORM=offscreen MPLCONFIGDIR=${TMPDIR:-/tmp}/mpl TOKENIZERS_PARALLELISM=false; cd "$MP_ROOT"; exec bash "$0" "$@"'
 echo "[SLURM-INFO] host $(hostname) | job ${SLURM_JOB_ID:-local} | image $MP_IMAGE | ${nv[*]:-cpu} | $script $*"
-rc=0; singularity exec --cleanenv "${nv[@]}" --bind "$binds" "$MP_IMAGE" bash -c "$prefix" "$MP_ROOT/$script" "$@" || rc=$?
+rc=0; "$app" exec --cleanenv "${nv[@]}" --bind "$binds" "$MP_IMAGE" bash -c "$prefix" "$MP_ROOT/$script" "$@" || rc=$?
 ###################################### verify outputs
 if [ "$rc" -eq 0 ]; then
   IFS=: read -ra outs <<< "${MP_OUTPUTS:-}"

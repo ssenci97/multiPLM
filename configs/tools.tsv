@@ -14,3 +14,4 @@ esmc_600m	weights	esmc	esm-evo	https://huggingface.co/biohub/esmc-600m-2024-12	e
 esmc_6b	weights	esmc6b	esm-evo	https://huggingface.co/biohub/ESMC-6B	94605596759c3216963f6b7e5ff7adc1994c95f0	*.safetensors,*.json	25.41	2560	80	all	MIT + Biohub AUP (HF model card)
 prott5_xl_half	weights	prott5	mp	https://huggingface.co/Rostlab/prot_t5_xl_half_uniref50-enc	94a6abc029ae13029317b140b7424e012bf8dfbf	*.json,*.model,*.bin	2.42	1024	24	all	see model card (HF API 2026-11-14: no licence tag)
 prostt5	weights	prostt5	mp	https://huggingface.co/Rostlab/ProstT5	d7d097d5bf9a993ab8f68488b4681d6ca70db9e5	*.json,*.model,*.bin	11.28	1024	24	all	MIT
+umap-learn	software	-	dadapy	https://pypi.org/project/umap-learn/0.5.7/	sha256:b2a97973e4c6ffcebf241100a8de589a4c84126a832ab40f296c6d9fcc5eb19e	umap-learn-0.5.7.tar.gz	-	-	-	-	BSD-3-Clause (PyPI sdist 0.5.7, uploaded 2024-10-28)

@@ -28,6 +28,8 @@ TWONN = dict(enabled=False, max_points=10000, mu_fraction=0.9, n_min=20, metric=
 DADAPY_PYTHON = "/opt/envs/dadapy/bin/python"
 WRAPPER = Path(__file__).resolve().parent / "intrinsic_dim.py"
 PCA = dict(enabled=False, per_sample_cap=1000, hex_bins=30, per_sample_pca=False, max_components=50)
+EMBED2D = dict(enabled=False, max_points=1000)
+EMBED2D_WRAPPER = Path(__file__).resolve().parent / "embed2d.py"
 EMBED_COLS = ["sample_id", "backend", "proteins", "dim", "keys", "store_dtype", "compute_dtype", "truncated", "files", "revision", "input_sha256"]
 SAMPLE_COLS = ["sample_id", "records", "kept", "invalid", "source", "uniprot_release", "fasta_sha256"]
 ID_COLS = ["backend", "key", "layer", "pooling", "sample", "points", "d", "error", "dropped", "dropped_warning", "metric", "stratified_tokens", "proteins_used"]
@@ -38,10 +40,11 @@ parser.add_argument("--pairs", type=int, default=PAIRS, help="Random protein pai
 parser.add_argument("--norm_bins", type=int, default=NORM_BINS)
 parser.add_argument("--twonn", type=yaml.safe_load, default=TWONN, help="TWO-NN settings (mapping)")
 parser.add_argument("--pca", type=yaml.safe_load, default=PCA, help="PCA settings (mapping)")
+parser.add_argument("--embed2d", type=yaml.safe_load, default=EMBED2D, help="t-SNE/UMAP settings (mapping); only below max_points, never subsampled")
 parser.add_argument("--yaml-in", nargs="?", const=YAML_PATH, default=YAML_PATH)
 parser.add_argument("--yaml-out", nargs="?", const=YAML_PATH, default=None)
 cli_preview, _ = parser.parse_known_args()
-params = dict(pairs=PAIRS, norm_bins=NORM_BINS, twonn=TWONN, pca=PCA)
+params = dict(pairs=PAIRS, norm_bins=NORM_BINS, twonn=TWONN, pca=PCA, embed2d=EMBED2D)
 if cli_preview.yaml_in and Path(cli_preview.yaml_in).exists():
     config_data = yaml.safe_load(Path(cli_preview.yaml_in).read_text()) or {}
     sec = config_data.get(SCRIPT_KEY) or {}
@@ -131,6 +134,7 @@ def pca_block(idx: dict[str, Path], k: str, lens: dict[str, np.ndarray], cent: d
                explained=ev[:int(P["max_components"])].round(5).tolist(), components_90=int(np.searchsorted(cum, 0.9) + 1), fit_points={s: len(sub[s]) for s in names},
                pc1_length=dict(r=None if r is None else round(r, 3), bins=[float(pc1[(L >= a) & (L < b)].mean()) if ((L >= a) & (L < b)).any() else None for a, b in zip(LENGTH_EDGES[:-1], LENGTH_EDGES[1:])]),
                confusion=conf.tolist(), within_spread={s: round(v, 4) for s, v in spread.items()})
+    if sum(len(v) for v in xy.values()) < int(args.embed2d["max_points"]): out["points"] = {s: xy[s].round(3).tolist() for s in names}
     if P.get("per_sample_pca"):
         own = {}
         for s in names:
@@ -139,6 +143,18 @@ def pca_block(idx: dict[str, Path], k: str, lens: dict[str, np.ndarray], cent: d
             own[s] = dict(box=b2, hex=hexbin(q, b2, int(P["hex_bins"])), explained=(sv2[:2] ** 2 / (sv2 ** 2).sum()).round(4).tolist())
         out["per_sample"] = own
     return out
+def embed2d_tasks(idx: dict[str, Path], k: str, tmp: Path, name: str) -> dict | None:
+    """All vectors of one key (never subsampled) as one .npy plus sample labels, or None at or above embed2d.max_points."""
+    ns = {s: json.loads(p.read_text())["n"] for s, p in idx.items()}
+    if sum(ns.values()) >= int(args.embed2d["max_points"]): return None
+    X = np.concatenate([store.take_rows(p, list(range(ns[s])), k).astype(np.float32) for s, p in idx.items()])
+    np.save(tmp / f"{name}.npy", X)
+    return dict(name=name, path=str(tmp / f"{name}.npy"), labels=[s for s in idx for _ in range(ns[s])])
+def run_embed2d(tasks: list[dict], tmp: Path) -> dict[str, dict]:
+    """Run src/embed2d.py with the dadapy venv interpreter and return its results by task name."""
+    (tmp / "e2d_manifest.json").write_text(json.dumps(dict(tasks=[dict(name=t["name"], path=t["path"]) for t in tasks])))
+    subprocess.run([dadapy_python(), str(EMBED2D_WRAPPER), "--manifest", str(tmp / "e2d_manifest.json"), "--out", str(tmp / "e2d_out.json"), "--max_points", str(int(args.embed2d["max_points"]))], check=True)
+    return {r["name"]: r for r in json.loads((tmp / "e2d_out.json").read_text())}
 def norm_stats(b: str, idx: dict[str, Path], k: str, lens: dict[str, dict[str, int]]) -> tuple[dict, dict, dict]:
     """Norm and cosine statistics of one mean key; also returns centroids and row lengths."""
     norms, cent, row_len = {}, {}, {}
@@ -168,9 +184,9 @@ def main() -> None:
         if args.yaml_out: return
         parser.error("--analysis_dir is required")
     a = Path(args.analysis_dir); rows, samples, ids_rows = [], [], []
-    agg = dict(length_edges=LENGTH_EDGES[:-1] + ["inf"], samples={}, backends={}, throughput={}, twonn=dict(settings=args.twonn, rows=[]), pca={})
-    tasks = []
-    if args.twonn.get("enabled"): dadapy_python()
+    agg = dict(length_edges=LENGTH_EDGES[:-1] + ["inf"], samples={}, backends={}, throughput={}, twonn=dict(settings=args.twonn, rows=[]), pca={}, embed2d={})
+    tasks, e2d = [], []
+    if args.twonn.get("enabled") or args.embed2d.get("enabled"): dadapy_python()
     tmp = Path(tempfile.mkdtemp(dir=a, prefix=".twonn_"))
     lens = {}
     for side in sorted((a / "fasta").glob("*.json")):
@@ -202,6 +218,13 @@ def main() -> None:
             for k in tqdm(means, desc=f"{b} PCA", mininterval=30):
                 cent_k = cent if k == means[-1] else {s: sum(blk.astype(np.float64).sum(0) for _, blk in store.iter_blocks(p, k)) for s, p in idx.items()}
                 agg["pca"].setdefault(b, {})[k] = pca_block(idx, k, row_len, cent_k)
+        if args.embed2d.get("enabled") and means:
+            t = embed2d_tasks(idx, means[-1], tmp, f"e{len(e2d)}")
+            if t: e2d.append(dict(t, backend=b, key=means[-1]))
+            else: agg["embed2d"].setdefault(b, {})[means[-1]] = dict(skipped=f"n >= {int(args.embed2d['max_points'])}")
+    if e2d:
+        res = run_embed2d(e2d, tmp)
+        for t in e2d: agg["embed2d"].setdefault(t["backend"], {})[t["key"]] = dict({k: v for k, v in res[t["name"]].items() if k != "name"}, labels=t["labels"], samples=list(dict.fromkeys(t["labels"])))
     if tasks: ids_rows = agg["twonn"]["rows"] = run_dadapy(tasks, tmp)
     shutil.rmtree(tmp)
     for t in agg["throughput"].values(): t["proteins_per_gpu_hour"] = round(t["proteins"] / (t["gpu_s"] / 3600), 1) if t["gpu_s"] else None

@@ -8,7 +8,7 @@ Status on 2026-11-15: the code, the tests and the console are written and checke
 |---|---|
 | Purpose | Protein language model representations of FASTA samples, any layer, mean-pooled or per residue, stored as safetensors |
 | Backends | fair-esm ESM2 (8M–3B), ESM3-small-open, ESMC 300M/600M/6B, ProtT5-XL-half, ProstT5 (§2) |
-| Extras | optional MMseqs2 deduplication; summary aggregates with TWO-NN intrinsic dimension (computed with DADApy) and an optional joint PCA (no UMAP/t-SNE) |
+| Extras | optional MMseqs2 deduplication; summary aggregates with TWO-NN intrinsic dimension (computed with DADApy) and an optional joint PCA, and t-SNE/UMAP only below 1000 points (never subsampled) |
 | How it runs | Every job runs inside one pinned image (Docker → Singularity `.sif`) as a plain SLURM job. `src/pipeline.py` decides what to run from the files on disk; there is no workflow engine. GPU jobs form their own lane (§11) |
 | Origin | Extraction logic from SCambrian (ESMC-6B key translation, UniProt paging). Driver, job wrapper and console ported from KNOCKIN-VAL `2263299`. TWO-NN (Facco et al. 2017) through DADApy (§18) |
 

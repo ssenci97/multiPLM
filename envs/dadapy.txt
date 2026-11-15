@@ -5,3 +5,4 @@ scikit-learn==1.5.2
 jax==0.4.30
 jaxlib==0.4.30
 flax==0.8.5
+umap-learn==0.5.7

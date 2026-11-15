@@ -20,7 +20,6 @@
       <button type="button" role="tab" data-tab="run" aria-selected="false">Run</button>
       <button type="button" role="tab" data-tab="results" aria-selected="false">Results</button>
     </nav>
-    <button id="theme" type="button" class="pill plain" title="Switch light / dark theme" aria-pressed="false">◐ Theme</button>
     <button id="perf-toggle" type="button" class="pill perf-btn" aria-pressed="false" title="Performance: cluster nodes, GPUs and job efficiency">◆ Performance</button>
   </div>
 </header>
@@ -46,19 +45,19 @@
         <div class="field grow"><label for="analysis">Analysis name</label><input id="analysis" type="text" placeholder="aedes_esmc_2026_11" autocomplete="off"></div>
         <div class="field"><label for="pick">Existing</label><select id="pick"><option value="">—</option></select></div>
       </div>
-      <h3>Backends <span class="muted small">(each ticked backend embeds every sample on a GPU)</span></h3>
+      <h3>Backends <span class="muted small">(each switched-on backend embeds every sample on a GPU)</span></h3>
       <div id="backends" class="backends" role="group" aria-label="Backends"></div>
       <p id="backend-why" class="muted small"></p>
-      <div class="row">
-        <label class="check"><input id="use-example" type="checkbox"> Run the selected example instead of the saved samples</label>
-        <label class="check"><input id="online-here" type="checkbox"> Download weights on this host (compute nodes without internet; UniProtKB samples are always downloaded on this host when you click Run)</label>
-        <label class="check"><input id="allow-large" type="checkbox"> Allow output above the size cap</label>
+      <div class="switches">
+        <label class="switch"><input id="use-example" type="checkbox"><span></span>Run the selected example instead of the saved samples</label>
+        <label class="switch"><input id="online-here" type="checkbox"><span></span>Download weights on this host (compute nodes without internet; UniProtKB samples are always downloaded on this host when you click Run)</label>
+        <label class="switch"><input id="allow-large" type="checkbox"><span></span>Allow output above the size cap</label>
       </div>
       <div class="toolbar">
         <button id="run" type="button" class="pill blue">▶ Run on SLURM</button>
         <button id="stop" type="button" class="pill red">■ Stop</button>
         <button id="stop-all" type="button" class="pill red">■ Stop all</button>
-        <label class="check"><input id="auto" type="checkbox" checked> Auto-refresh</label>
+        <label class="switch"><input id="auto" type="checkbox" checked><span></span>Auto-refresh</label>
         <span id="run-state" class="badge idle">idle</span>
       </div>
       <p id="size" class="muted small" aria-live="polite"></p>
@@ -72,11 +71,13 @@
   </section>
   <section id="tab-results" role="tabpanel" aria-label="Results" hidden>
     <div class="card row"><div class="field"><label for="res-pick">Analysis</label><select id="res-pick"><option value="">—</option></select></div></div>
-    <div class="card"><h3>Embeddings (sample × backend)</h3><p class="muted small">✓ = merged file present (proteins × dimensions, stored keys); ○ = not produced yet.</p><div id="matrix"></div></div>
-    <div class="card"><h3>Records per sample</h3><div id="records-legend" class="legend"></div><div id="records"></div></div>
-    <div class="card"><h3>Aggregates</h3><p class="muted small">Computed by the summary job from cheap statistics; raw vectors never reach the browser.</p><div class="row"><div class="field"><label for="agg-backend">Backend</label><select id="agg-backend" class="inline"></select></div><div class="field"><label for="agg-layer">Representation (layer / pooling)</label><select id="agg-layer" class="inline"></select></div></div><div id="charts"></div></div>
+    <div class="card row"><div class="field"><label for="agg-backend">Backend</label><select id="agg-backend" class="inline"></select></div><div class="field"><label for="agg-layer">Representation (layer / pooling)</label><select id="agg-layer" class="inline"></select></div></div>
     <div class="card"><h3>Intrinsic dimension (TWO-NN)</h3><p class="muted small">Computed with DADApy (Glielmo et al. 2022, doi:10.1016/j.patter.2022.100589), method of Facco, d'Errico, Rodriguez, Laio (2017) Sci Rep 7:12140, doi:10.1038/s41598-017-11873-y. Read d(N) as a curve: a plateau over N is the relevant dimension; very small N falls toward 1, noise inflates d at large N.</p><div id="twonn"></div></div>
     <div class="card"><h3>PCA (joint fit, hexbin densities)</h3><p class="muted small">Fit on a balanced subsample, every vector projected; densities only. Off by default (summarize.pca.enabled).</p><div id="pca"></div></div>
+    <div class="card"><h3>PCA, t-SNE and UMAP (fewer than 1000 points, no subsampling)</h3><p class="muted small">Off by default (summarize.embed2d.enabled); last layer only.</p><div id="embed2d"></div></div>
+    <div class="card"><h3>Records per sample</h3><div id="records-legend" class="legend"></div><div id="records"></div><div id="charts"></div></div>
+    <details class="card"><summary>More diagnostics (norms, cosines, PC1 vs length, confusion, deduplication, status)</summary><div id="more"></div></details>
+    <details class="card"><summary>Embeddings (sample × backend)</summary><p class="muted small">✓ = merged file present (proteins × dimensions, stored keys); ○ = not produced yet.</p><div id="matrix"></div></details>
     <div class="card"><h3>Weights used</h3><div id="weights"></div></div>
     <details class="card"><summary>Per-sample provenance (JSON)</summary><pre id="meta" class="log"></pre></details>
   </section>

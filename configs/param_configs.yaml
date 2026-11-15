@@ -48,6 +48,9 @@ summarize:
     hex_bins: 30
     per_sample_pca: false
     max_components: 50
+  embed2d:
+    enabled: false
+    max_points: 1000
 slurm:
   partition: GENOA
   gpu_partition: DGX

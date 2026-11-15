@@ -13,7 +13,12 @@ function setTab(t) {
   store.set("tab", t);
   if (t === "run") refreshRun(); if (t === "results") refreshResults();
 }
-function setTheme(t) { if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; $("#theme").setAttribute("aria-pressed", t === "dark"); store.set("theme", t || ""); }
+function setH(el, html) {
+  if (el.__h === html) return;
+  const key = d => (d.querySelector("summary b") || d.querySelector("summary") || d).textContent.trim(), open = new Set([...el.querySelectorAll("details[open]")].map(key)), shut = new Set([...el.querySelectorAll("details:not([open])")].map(key));
+  el.innerHTML = html; el.__h = html;
+  el.querySelectorAll("details").forEach(d => { const k = key(d); if (open.has(k)) d.open = true; else if (shut.has(k)) d.open = false; });
+}
 
 function field(f, v, ro) {
   return `<div class="field"><label for="${f.id}_X">${esc(f.label)}${f.required ? " *" : ""}</label><input type="text" data-id="${f.id}" value="${esc(v || "")}" placeholder="${esc(f.help || "")}" ${ro ? "readonly" : ""} aria-describedby="${f.id}_X_h"><p class="hint" id="${f.id}_X_h"></p></div>`;
@@ -59,8 +64,8 @@ async function saveSamples() {
 async function loadBackends() {
   const r = await api("/api/backends");
   $("#backend-why").textContent = `Default ask per GPU job: ${r.why}. GPU lane: ${r.gpus_max} GPU at a time.`;
-  $("#backends").innerHTML = r.backends.map(b => `<label class="backend"><span class="check"><input type="checkbox" value="${esc(b.name)}" ${r.selected.includes(b.name) ? "checked" : ""}> <b>${esc(b.name)}</b> ${b.weights === "ready" ? '<span class="badge done">weights</span>' : '<span class="badge waiting" title="weights to download: the pinned revision is not on disk yet">no weights</span>'}</span>
-    <span class="meta">${esc(b.family)} · ${esc(b.size_gb)} GB · ${esc(b.partition)} · ${b.cpus} cores ${(b.mem_mb / 1000).toFixed(0)} GB · rev ${esc(b.revision.slice(0, 10))}</span><span class="meta" title="licence">${esc(b.licence)}</span></label>`).join("");
+  $("#backends").innerHTML = r.backends.map(b => `<div class="backend"><label class="switch"><input type="checkbox" value="${esc(b.name)}" ${r.selected.includes(b.name) ? "checked" : ""}><span></span><b>${esc(b.name)}</b> ${b.weights === "ready" ? '<span class="badge done">weights</span>' : '<span class="badge waiting" title="weights to download: the pinned revision is not on disk yet">no weights</span>'}</label>
+    <span class="meta">${esc(b.family)} · ${esc(b.size_gb)} GB · ${esc(b.partition)} · ${b.cpus} cores ${(b.mem_mb / 1000).toFixed(0)} GB · rev ${esc(b.revision.slice(0, 10))}</span><span class="meta" title="licence">${esc(b.licence)}</span></div>`).join("");
   $("#backends").querySelectorAll("input").forEach(i => i.onchange = async () => {
     try { await api("/api/backends", { backends: [...$("#backends").querySelectorAll("input:checked")].map(x => x.value) }); } catch (e) { i.checked = true; alert((e.errors || []).join("\n")); }
   });
@@ -74,13 +79,13 @@ async function refreshRun() {
   $("#res-pick").innerHTML = '<option value="">—</option>' + r.analyses.map(a => `<option ${a.name === store.get("res", "") ? "selected" : ""}>${esc(a.name)}</option>`).join("");
   const rs = $("#run-state"); rs.className = "badge " + r.outcome; rs.textContent = STATES[r.outcome] || r.outcome;
   $("#size").textContent = r.size ? `${r.size.level === "ok" ? "✓" : r.size.level === "warn" ? "▲ large:" : "✕ above the cap:"} estimated embeddings ${r.size.total_gb} GB (warn above ${r.size.warn_gb} GB, refuse above ${r.size.cap_gb} GB unless allowed)${r.size.hard && r.size.hard.length ? " ✕ " + r.size.hard.join("; ") + " (hard cap)" : ""}` : "";
-  $("#progress").innerHTML = r.progress ? `<p class="muted small">${r.progress.done}/${r.progress.total} jobs done (${r.progress.pct}%)</p>${bar([{ n: r.progress.done, cls: "ok", label: "done" }, { n: r.progress.total - r.progress.done, cls: "", label: "to do" }])}` : "";
-  $("#steps").innerHTML = r.steps.map(s => {
+  setH($("#progress"), r.progress ? `<p class="muted small">${r.progress.done}/${r.progress.total} jobs done (${r.progress.pct}%)</p>${bar([{ n: r.progress.done, cls: "ok", label: "done" }, { n: r.progress.total - r.progress.done, cls: "", label: "to do" }])}` : "");
+  setH($("#steps"), r.steps.map(s => {
     const open = s.failed || s.cancelled ? "open" : "", state = s.failed ? "failed" : s.done === s.total ? "done" : s.running ? "running" : "waiting";
     return `<details class="card step" ${open}><summary>${badge(state)} <b>${esc(s.step)}</b> <span class="count">${s.done}/${s.total}${s.failed ? ` · ${s.failed} failed` : ""}${s.running ? ` · ${s.running} running` : ""}</span><span class="grow"></span><span style="width:180px">${bar([{ n: s.done, cls: "ok", label: "done" }, { n: s.running, cls: "run", label: "running" }, { n: s.failed + s.cancelled, cls: "bad", label: "failed or cancelled" }, { n: s.total - s.done - s.running - s.failed - s.cancelled, cls: "", label: "waiting" }])}</span></summary>
       ${s.jobs.map(j => `<div class="job">${badge(j.state)} ${j.gpu ? '<span class="badge gpu">GPU</span>' : ""} ${esc(j.job)} <span class="muted small">${esc(j.log)}</span>${j.tail ? `<pre class="log">${esc(j.tail)}</pre>` : ""}</div>`).join("")}</details>`;
-  }).join("");
-  $("#queue").innerHTML = r.queue.length ? `<table><tr><th>job</th><th>name</th><th>state</th><th>time</th><th>partition</th><th>where / reason</th></tr>${r.queue.map(q => `<tr><td>${esc(q.job)}</td><td>${esc(q.name)}</td><td>${esc(q.state)}</td><td>${esc(q.time)}</td><td>${esc(q.partition)}</td><td>${esc(q.where)}</td></tr>`).join("")}</table>` : '<p class="muted">no queued job</p>';
+  }).join(""));
+  setH($("#queue"), r.queue.length ? `<table><tr><th>job</th><th>name</th><th>state</th><th>time</th><th>partition</th><th>where / reason</th></tr>${r.queue.map(q => `<tr><td>${esc(q.job)}</td><td>${esc(q.name)}</td><td>${esc(q.state)}</td><td>${esc(q.time)}</td><td>${esc(q.partition)}</td><td>${esc(q.where)}</td></tr>`).join("")}</table>` : '<p class="muted">no queued job</p>');
   $("#node-log").textContent = r.node_log || "—"; $("#run-log").textContent = r.log || "—";
 }
 async function run() {
@@ -150,6 +155,19 @@ function twonnCharts(A, b, key) {
     html += `<div class="scroll"><table><tr><th>sample</th><th>points</th><th>d</th><th>± SE (N/2)</th><th>duplicates dropped</th><th>note</th></tr>${at.map(r => `<tr><td>${esc(r.sample)}</td><td>${r.points}</td><td>${r.d ?? "—"}</td><td>${r.error ?? "—"}</td><td>${r.dropped}${r.dropped_warning ? " ▲ above 10%: unreliable" : ""}</td><td>${r.stratified_tokens ? "residues as points, stratified by protein" : "one mean vector per protein"}</td></tr>`).join("")}</table></div>`; }
   box.innerHTML = html || '<p class="muted">no TWO-NN estimate for this backend</p>';
 }
+function scatter(title, series, W = 360, H = 300) {
+  const names = Object.keys(series), all = names.flatMap(n => series[n]), xs = all.map(p => p[0]), ys = all.map(p => p[1]), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const X = v => 10 + (W - 20) * (v - x0) / ((x1 - x0) || 1), Y = v => H - 10 - (H - 20) * (v - y0) / ((y1 - y0) || 1);
+  const dots = names.map((n, i) => series[n].map(p => `<g><title>${esc(n)}</title>${shape(i, X(p[0]).toFixed(1), Y(p[1]).toFixed(1), fill(i))}</g>`).join("")).join("");
+  return `<figure class="panel"><figcaption>${esc(title)}</figcaption><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}" style="width:${W}px;max-width:100%;border:1px solid var(--hair)">${dots}</svg></figure>`;
+}
+function embed2dCharts(A, b, key, P) {
+  const box = $("#embed2d"), E = ((A.embed2d || {})[b] || {})[key], by = (pts, labels) => { const o = {}; pts.forEach((p, i) => (o[labels[i]] = o[labels[i]] || []).push(p)); return o; };
+  const pca = P && P.points ? scatter("PCA", P.points) : "";
+  if (!E && !pca) { box.innerHTML = '<p class="muted">no 2D embedding for this representation (summarize.embed2d.enabled is off, or it is computed for the last layer only)</p>'; return; }
+  if (E && E.skipped) { box.innerHTML = pca + `<p class="muted">t-SNE and UMAP skipped (${esc(E.skipped)}): they are only drawn when every point can be shown, without subsampling.</p>`; return; }
+  box.innerHTML = `${legend(E ? E.samples : Object.keys(P.points))}<div class="panels">${pca}${E ? scatter("t-SNE", by(E.tsne, E.labels)) + scatter("UMAP", by(E.umap, E.labels)) : ""}</div><p class="muted small">All ${E ? E.points : ""} points shown, no subsampling. Distances between far-apart clusters are not meaningful in t-SNE or UMAP; use them to see grouping, not to measure.</p>`;
+}
 function hexPanel(name, P, cells, max, W = 230) {
   const [x0, x1, y0, y1] = P.box, n = P.bins, sx = (x1 - x0) / n, sy = (y1 - y0) / n * Math.sqrt(3), H = W * (y1 - y0) / ((x1 - x0) || 1) || W, kx = W / (x1 - x0), ky = H / (y1 - y0), r = sx * kx / Math.sqrt(3) * 1.05;
   const hexPath = (cx, cy) => Array.from({ length: 6 }, (_, i) => { const a = Math.PI / 3 * i + Math.PI / 6; return `${(cx + r * Math.cos(a)).toFixed(1)},${(cy + r * Math.sin(a)).toFixed(1)}`; }).join(" ");
@@ -159,27 +177,29 @@ function hexPanel(name, P, cells, max, W = 230) {
 }
 function pcaCharts(A, b, key) {
   const box = $("#pca"), P = ((A.pca || {})[b] || {})[key];
-  if (!P) { box.innerHTML = '<p class="muted">not computed for this representation (summarize.pca.enabled is off)</p>'; return; }
+  if (!P) { box.innerHTML = '<p class="muted">not computed for this representation (summarize.pca.enabled is off)</p>'; return ""; }
   const max = Math.max(1, ...Object.values(P.hex).flatMap(cs => cs.map(c => c[3])));
   let html = `<p class="muted small">Shared axes and shared density scale (lightest = 1, darkest = ${max} vectors per hexagon; hover for counts). Fit on ${Object.entries(P.fit_points).map(([s, n]) => `${n} ${esc(s)}`).join(", ")}; clipped to the 0.5–99.5% range: ${Object.entries(P.clipped).map(([s, n]) => `${esc(s)} ${n}`).join(", ")}.</p><div class="panels">${P.samples.map(s => hexPanel(s, P, P.hex[s], max)).join("")}</div>`;
-  if (P.per_sample) html += `<h4>Per-sample PCA (own axes)</h4><div class="panels">${P.samples.map(s => hexPanel(s, Object.assign({ bins: P.bins }, P.per_sample[s]), P.per_sample[s].hex, Math.max(1, ...P.per_sample[s].hex.map(c => c[3])))).join("")}</div>`;
   const cum = P.explained.reduce((a, v) => (a.push((a.length ? a[a.length - 1] : 0) + v), a), []);
   html += lines(`Cumulative explained variance (${P.components_90} components reach 90%)`, cum.map((_, i) => i + 1), { cumulative: cum, "90%": cum.map(() => 0.9) }, { xlabel: "components", ylabel: "fraction", ymax: 1 });
+  box.innerHTML = html; html = "";
+  if (P.per_sample) html += `<h4>Per-sample PCA (own axes)</h4><div class="panels">${P.samples.map(s => hexPanel(s, Object.assign({ bins: P.bins }, P.per_sample[s]), P.per_sample[s].hex, Math.max(1, ...P.per_sample[s].hex.map(c => c[3])))).join("")}</div>`;
   const bins = A.length_edges.slice(0, -1).map((e, i) => `${e}–${A.length_edges[i + 1]}`);
   html += `<h4>PC1 versus protein length ${P.pc1_length.r !== null && Math.abs(P.pc1_length.r) > 0.5 ? "▲ warning" : ""}</h4><p class="muted small">Pearson r = ${P.pc1_length.r ?? "—"}${P.pc1_length.r !== null && Math.abs(P.pc1_length.r) > 0.5 ? ": the first component largely tracks length, not biology" : ""}.</p>` + bars("Mean PC1 score by length", bins, { "mean PC1": P.pc1_length.bins }, v => v === null ? "—" : Number(v).toFixed(3));
   html += `<h4>Nearest-centroid assignment (rows: true sample, columns: nearest centroid)</h4><div class="scroll"><table><tr><th></th>${P.samples.map(s => `<th>${esc(s)}</th>`).join("")}<th>within-sample spread (mean 1 − cosine to own centroid)</th></tr>${P.confusion.map((row, i) => { const t = row.reduce((a, v) => a + v, 0) || 1; return `<tr><th>${esc(P.samples[i])}</th>${row.map((v, j) => `<td>${i === j ? "✓ " : ""}${v} (${(100 * v / t).toFixed(0)}%)</td>`).join("")}<td>${P.within_spread[P.samples[i]]}</td></tr>`; }).join("")}</table></div>`;
-  box.innerHTML = html;
+  return html;
 }
 function charts(r) {
   const A = r.aggregates, box = $("#charts"), sel = $("#agg-backend");
-  if (!A) { box.innerHTML = '<p class="muted">no aggregates yet (04_summary)</p>'; sel.innerHTML = ""; return; }
+  if (!A) { box.innerHTML = '<p class="muted">no aggregates yet (04_summary)</p>'; $("#more").innerHTML = ""; sel.innerHTML = ""; return; }
   const samples = Object.keys(A.samples), bins = A.length_edges.slice(0, -1).map((e, i) => `${e}–${A.length_edges[i + 1]}`);
   const bnames = [...new Set([...Object.keys(A.backends), ...Object.keys(A.pca || {}), ...((A.twonn || {}).rows || []).map(x => x.backend)])];
   const cur = sel.value; sel.innerHTML = bnames.map(b => `<option ${b === cur ? "selected" : ""}>${esc(b)}</option>`).join(""); sel.onchange = () => charts(r);
   const lsel = $("#agg-layer"), lcur = lsel.value, keys = [...new Set([...Object.keys((A.pca || {})[sel.value] || {}), ...((A.twonn || {}).rows || []).filter(x => x.backend === sel.value).map(x => x.key)])].sort((x, y) => parseInt(x.split("_")[1]) - parseInt(y.split("_")[1]));
   lsel.innerHTML = keys.map(k => `<option ${k === lcur ? "selected" : ""}>${esc(k)}</option>`).join(""); if (!keys.includes(lcur) && keys.length) lsel.value = keys[keys.length - 1]; lsel.onchange = () => charts(r);
-  twonnCharts(A, sel.value, lsel.value); pcaCharts(A, sel.value, lsel.value);
-  let html = bars("Protein length (kept records)", bins, Object.fromEntries(samples.map(s => [s, A.samples[s].length_hist])), v => `${v} proteins`);
+  twonnCharts(A, sel.value, lsel.value); const pcaMore = pcaCharts(A, sel.value, lsel.value); embed2dCharts(A, sel.value, lsel.value, ((A.pca || {})[sel.value] || {})[lsel.value]);
+  const qc = bars("Protein length (kept records)", bins, Object.fromEntries(samples.map(s => [s, A.samples[s].length_hist])), v => `${v} proteins`);
+  let html = "";
   if (samples.some(s => A.samples[s].dedup)) html += `<h4>MMseqs2 deduplication</h4><table><tr><th>sample</th><th>proteins</th><th>representatives</th><th>represented by another sample</th><th>settings</th></tr>${samples.map(s => { const d = A.samples[s].dedup; return d ? `<tr><td>${esc(s)}</td><td>${d.proteins}</td><td>${d.representatives}</td><td>${d.represented_in_other_samples}</td><td>${esc(d.mode)} id ${d.min_seq_id} cov ${d.coverage} (${esc(d.scope)}, mmseqs ${esc(d.mmseqs_version)})</td></tr>` : ""; }).join("")}</table>`;
   html += `<h4>Status per sample</h4><table><tr><th>sample</th>${[...new Set(samples.flatMap(s => Object.keys(A.samples[s].status)))].map(k => `<th>${esc(k)}</th>`).join("")}<th>embedded</th></tr>${samples.map(s => { const st = A.samples[s].status, keys = [...new Set(samples.flatMap(x => Object.keys(A.samples[x].status)))]; return `<tr><td>${esc(s)}</td>${keys.map(k => `<td>${st[k] || 0}</td>`).join("")}<td>${esc(Object.entries(A.samples[s].embedded || {}).map(([k, v]) => `${k} ${v}`).join(" · ") || "—")}</td></tr>`; }).join("")}</table>`;
   const B = A.backends[sel.value];
@@ -188,13 +208,8 @@ function charts(r) {
     html += `<p class="muted small">Vectors: ${esc(B.key)} (mean of real residues).</p>` + bars("L2 norm of the mean vectors", centers, B.norm_hist, v => `${v} proteins`) + bars("Mean norm by protein length", bins, B.length_vs_norm, v => v === null ? "—" : Number(v).toFixed(3)) + heat("Cosine between sample centroids", B.centroid_cosine);
     const cbins = Array.from({ length: 20 }, (_, i) => (-1 + i * 0.1 + 0.05).toFixed(2));
     html += bars(`Cosine of random pairs: within sample (mean ${B.cosine.within.mean ?? "—"}, n ${B.cosine.within.n}) vs between samples (mean ${B.cosine.between.mean ?? "—"}, n ${B.cosine.between.n})`, cbins, { within: B.cosine.within.hist, between: B.cosine.between.hist }, v => `${v} pairs`);
-    if (B.pca_preview) {
-      const P = B.pca_preview, xs = P.points.map(p => p[0]), ys = P.points.map(p => p[1]), W = 480, H = 360, sx = v => 20 + (W - 40) * (v - Math.min(...xs)) / (Math.max(...xs) - Math.min(...xs) || 1), sy = v => H - 20 - (H - 40) * (v - Math.min(...ys)) / (Math.max(...ys) - Math.min(...ys) || 1);
-      const lab = [...new Set(P.points.map(p => p[2]))];
-      html += `<h4>PCA ${esc(P.label)} (${P.n} vectors, explained ${P.explained.join(" / ")})</h4><div class="legend">${lab.map((l, i) => `<span><svg width="14" height="14" aria-hidden="true">${shape(i, 7, 7, fill(i))}</svg>${esc(l)}</span>`).join("")}</div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="PCA preview" style="width:100%;max-width:${W}px">${P.points.map(p => `<g><title>${esc(p[2])}</title>${shape(lab.indexOf(p[2]), sx(p[0]), sy(p[1]), fill(lab.indexOf(p[2])))}</g>`).join("")}</svg>`;
-    }
   }
-  box.innerHTML = html;
+  box.innerHTML = qc; $("#more").innerHTML = html + (pcaMore || "");
 }
 function mini(pct, warnBelow = 50) { if (pct === null || pct === undefined) return '<span class="muted">—</span>'; const cls = pct >= 80 ? "ok" : pct >= warnBelow ? "warn" : "low"; return `<span class="mini" title="${pct}%"><i class="${cls}" style="width:${Math.min(100, pct)}%"></i></span> ${pct}%`; }
 function ownBar(total, ours, used, unit) { const others = Math.max(0, used - ours); return `<div class="bar" role="img" aria-label="${ours} ${unit} ours, ${others} other users, ${Math.max(0, total - used)} free" title="${ours} ${unit} ours · ${others} others · ${Math.max(0, total - used)} free of ${total}">${ours ? `<i class="ours" style="width:${100 * ours / (total || 1)}%"></i>` : ""}<i class="others" style="width:${100 * others / (total || 1)}%"></i></div>`; }
@@ -228,7 +243,6 @@ async function init() {
   $("#pick").onchange = () => { $("#analysis").value = $("#pick").value; store.set("analysis", $("#pick").value); refreshRun(); };
   $("#res-pick").onchange = refreshResults;
   $("#analysis").value = store.get("analysis", "");
-  $("#theme").onclick = () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"); setTheme(store.get("theme", "") || null);
   $("#perf-toggle").onclick = () => setPerf($("#perf").hidden); $("#perf-back").onclick = () => setPerf(false);
   timer = setInterval(() => { if ($("#auto").checked && !$("#tab-run").hidden) refreshRun(); }, 5000);
   const q = new URLSearchParams(location.search); if (q.get("analysis")) store.set("res", q.get("analysis"));

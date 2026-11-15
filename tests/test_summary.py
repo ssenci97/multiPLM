@@ -42,3 +42,22 @@ def test_missing_dadapy_env_stops_early(tmp_path):
     cfg = tmp_path / "p.yaml"; cfg.write_text(yaml.safe_dump(dict(summarize=dict(twonn=dict(enabled=True)))))
     r = subprocess.run([sys.executable, f"{ROOT}/src/summarize.py", "--analysis_dir", str(a), "--yaml-in", str(cfg)], capture_output=True, text=True, env=dict(os.environ, MP_DADAPY_PYTHON=str(tmp_path / "missing")))
     assert r.returncode != 0 and "needs the dadapy env" in r.stdout + r.stderr and not (a / "aggregates.json").exists()
+
+def run_summary(tmp_path, n, cap):
+    a = tmp_path / "results" / "x"; fake_analysis(a, n=n)
+    cfg = tmp_path / "p.yaml"; cfg.write_text(yaml.safe_dump(dict(summarize=dict(pairs=50, pca=dict(enabled=True, per_sample_cap=50, hex_bins=10), embed2d=dict(enabled=True, max_points=cap)))))
+    env = dict(os.environ, MP_DADAPY_PYTHON=sys.executable, PYTHONPATH=os.path.join(ROOT, "tests", "stub_dadapy"))
+    r = subprocess.run([sys.executable, f"{ROOT}/src/summarize.py", "--analysis_dir", str(a), "--yaml-in", str(cfg)], capture_output=True, text=True, env=env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    return json.loads((a / "aggregates.json").read_text())
+
+def test_embed2d_below_limit_shows_every_point(tmp_path):
+    agg = run_summary(tmp_path, 100, 1000)
+    E, P = agg["embed2d"]["fake_12"]["layer_2/mean"], agg["pca"]["fake_12"]["layer_2/mean"]
+    assert E["points"] == 200 == len(E["tsne"]) == len(E["umap"]) == len(E["labels"]) and E["samples"] == ["s1", "s2"]
+    assert sum(len(v) for v in P["points"].values()) == 200
+
+def test_embed2d_at_limit_is_skipped(tmp_path):
+    agg = run_summary(tmp_path, 100, 200)
+    assert agg["embed2d"]["fake_12"]["layer_2/mean"] == {"skipped": "n >= 200"}
+    assert "points" not in agg["pca"]["fake_12"]["layer_2/mean"]

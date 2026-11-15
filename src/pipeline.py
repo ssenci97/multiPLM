@@ -141,7 +141,7 @@ def plan(name: str, root: str = ROOT) -> list[dict]:
             add(f"merge.{b}.{s}", STEPS[4], f"merge {b} {s}", "04_merge.sh", [s, b, K, root_s, f"{a}/embeddings/{b}"], [f"{a}/embeddings/{b}/{s}.index.json", f"{a}/embeddings/{b}/{s}.ids.json", f"{a}/embeddings/{b}/{s}.json"],
                 f"{a}/logs/04_merge/{b}/{s}.log", [f"embed.{b}.{s}.{k}" for k in range(1, K + 1)], inputs=[f"{root_s}/shard_{k}.done.json" for k in range(1, K + 1)])
     deps = [j["key"] for j in jobs if kind(j["key"]) in ("prepare", "dedup", "merge")]
-    twonn = bool(((P.get("summarize") or {}).get("twonn") or {}).get("enabled"))
+    twonn = any(bool(((P.get("summarize") or {}).get(k) or {}).get("enabled")) for k in ("twonn", "embed2d"))
     reps_mb = -int(-estimate(name, root)["total_gb"] * 1000 // 1)
     sum_mb = max(RES["summary"][1], reps_mb) + (TWONN_RUNTIME_MB if twonn else 0)
     sum_why = f"default: total size of the reps it loads ({reps_mb} MB, minimum 1 GB)" + (f" + {TWONN_RUNTIME_MB // 1000} GB for the jax/DADApy runtime of the intrinsic dimension" if twonn else "")

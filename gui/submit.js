@@ -5,7 +5,7 @@ const store = { get(k, d) { try { const v = localStorage.getItem("mp." + k); ret
 const api = async (path, body) => { const r = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const j = await r.json(); if (!r.ok) throw j; return j; };
 const STATES = { done: "done", failed: "failed", cancelled: "cancelled", running: "running", stopped: "stopped (partial)", waiting: "waiting", idle: "idle" };
 const badge = s => `<span class="badge ${esc(s)}">${esc(STATES[s] || s)}</span>`;
-let schema = null, examples = [], timer = null, perfTimer = null;
+let saved = [], schema = null, examples = [], timer = null, perfTimer = null;
 
 function setTab(t) {
   document.querySelectorAll(".seg button").forEach(b => { const on = b.dataset.tab === t; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
@@ -54,26 +54,28 @@ function collect(cards) {
   });
 }
 function showSamples(list, ro) { const box = $("#samples"); box.innerHTML = ""; list.forEach(s => box.append(card(s, ro))); ["#add", "#save"].forEach(b => { $(b).disabled = !!ro; }); }
-async function loadSaved() { const r = await api("/api/samples"); showSamples(r.samples.length ? r.samples : [{}]); $("#example").value = ""; }
+function clearSamples() { showSamples([]); $("#example").value = ""; const st = $("#samples-status"); st.hidden = false; st.textContent = "Cards cleared. Nothing is saved until you click Save samples."; }
+function pickedBackends() { return [...$("#backends").querySelectorAll("input:checked")].map(x => x.value); }
+function showBackends(names, ro) { $("#backends").querySelectorAll("input").forEach(i => { i.checked = names.includes(i.value); i.disabled = !!ro; }); }
+async function loadSaved() { const r = await api("/api/samples"); showSamples(r.samples.length ? r.samples : [{}]); $("#example").value = ""; if ($("#backends").children.length) showBackends(saved, false); }
 async function saveSamples() {
   const st = $("#samples-status"); st.hidden = false;
-  try { const r = await api("/api/samples", { samples: collect() }); st.textContent = `✓ saved ${r.n} sample(s) to ${r.samples_tsv}`; }
+  try { const names = pickedBackends(); if (!names.length) throw { errors: ["switch on at least one model"] }; const r = await api("/api/samples", { samples: collect() }); await api("/api/backends", { backends: names }); saved = names; st.textContent = `✓ saved ${r.n} sample(s) to ${r.samples_tsv} and models ${names.join(", ")}`; }
   catch (e) { st.textContent = "✕ " + (e.errors || [JSON.stringify(e)]).join("\n✕ "); }
 }
 
 async function loadBackends() {
   const r = await api("/api/backends");
   $("#backend-why").textContent = `Default ask per GPU job: ${r.why}. GPU lane: ${r.gpus_max} GPU at a time.`;
+  saved = r.selected;
   $("#backends").innerHTML = r.backends.map(b => `<div class="backend"><label class="switch"><input type="checkbox" value="${esc(b.name)}" ${r.selected.includes(b.name) ? "checked" : ""}><span></span><b>${esc(b.name)}</b> ${b.weights === "ready" ? '<span class="badge done">weights</span>' : '<span class="badge waiting" title="weights to download: the pinned revision is not on disk yet">no weights</span>'}</label>
     <span class="meta">${esc(b.family)} · ${esc(b.size_gb)} GB · ${esc(b.partition)} · ${b.cpus} cores ${(b.mem_mb / 1000).toFixed(0)} GB · rev ${esc(b.revision.slice(0, 10))}</span><span class="meta" title="licence">${esc(b.licence)}</span></div>`).join("");
-  $("#backends").querySelectorAll("input").forEach(i => i.onchange = async () => {
-    try { await api("/api/backends", { backends: [...$("#backends").querySelectorAll("input:checked")].map(x => x.value) }); } catch (e) { i.checked = true; alert((e.errors || []).join("\n")); }
-  });
 }
 function bar(parts) { const tot = parts.reduce((a, p) => a + p.n, 0) || 1; return `<div class="bar" role="img" aria-label="${esc(parts.map(p => `${p.n} ${p.label}`).join(", "))}">${parts.map(p => p.n ? `<i class="${p.cls}" style="width:${100 * p.n / tot}%" title="${p.n} ${esc(p.label)}"></i>` : "").join("")}</div>`; }
 async function refreshRun() {
   const name = $("#analysis").value.trim() || store.get("analysis", "");
   const r = await api("/api/status?analysis=" + encodeURIComponent(name));
+  $("#run-config").textContent = `Models from the saved configuration: ${saved.join(", ") || "none"}. Change them in the Samples tab.`;
   $("#runtime").textContent = `image ${r.runtime.sif || "not pulled (containers/build.sh pull)"} · sbatch ${r.runtime.sbatch ? "✓" : "✕ missing"} · singularity ${r.runtime.apptainer ? "✓" : "✕ missing"}`;
   const pick = $("#pick"), cur = pick.value; pick.innerHTML = '<option value="">—</option>' + r.analyses.map(a => `<option ${a.name === name ? "selected" : ""}>${esc(a.name)}</option>`).join(""); if (cur && !name) pick.value = cur;
   $("#res-pick").innerHTML = '<option value="">—</option>' + r.analyses.map(a => `<option ${a.name === store.get("res", "") ? "selected" : ""}>${esc(a.name)}</option>`).join("");
@@ -236,9 +238,9 @@ async function init() {
   const hide = store.get("hideInfo", false); $("#info").hidden = hide; $("#toggle-info").textContent = hide ? "Show info" : "Hide info"; $("#toggle-info").setAttribute("aria-expanded", !hide);
   $("#toggle-info").onclick = () => { const h = !$("#info").hidden; $("#info").hidden = h; store.set("hideInfo", h); $("#toggle-info").textContent = h ? "Show info" : "Hide info"; $("#toggle-info").setAttribute("aria-expanded", !h); };
   $("#example").innerHTML = '<option value="">Saved samples (editable)</option>' + examples.map(e => `<option value="${esc(e.name)}">${esc(e.title)}</option>`).join("") + (examples.length > 1 ? '<option value="__all">All examples (read-only)</option>' : "");
-  $("#example").onchange = () => { const v = $("#example").value; if (!v) return loadSaved(); const ex = v === "__all" ? examples : examples.filter(e => e.name === v); showSamples(ex.flatMap(e => e.samples), true); $("#samples-status").hidden = false; $("#samples-status").textContent = ex.map(e => `${e.title} — backends ${e.backends.join(", ")} — ${e.credit}`).join("\n"); };
+  $("#example").onchange = () => { const v = $("#example").value; if (!v) return loadSaved(); const ex = v === "__all" ? examples : examples.filter(e => e.name === v); showSamples(ex.flatMap(e => e.samples), true); showBackends([...new Set(ex.flatMap(e => e.backends))], true); $("#samples-status").hidden = false; $("#samples-status").textContent = ex.map(e => `${e.title} — backends ${e.backends.join(", ")} — ${e.credit}`).join("\n"); };
   document.querySelectorAll(".seg button[data-tab]").forEach(b => b.onclick = () => setTab(b.dataset.tab));
-  $("#add").onclick = () => $("#samples").append(card({})); $("#reload").onclick = loadSaved; $("#save").onclick = saveSamples;
+  $("#clear").onclick = clearSamples; $("#add").onclick = () => $("#samples").append(card({})); $("#reload").onclick = loadSaved; $("#save").onclick = saveSamples;
   $("#run").onclick = run; $("#stop").onclick = () => stop(false); $("#stop-all").onclick = () => stop(true);
   $("#pick").onchange = () => { $("#analysis").value = $("#pick").value; store.set("analysis", $("#pick").value); refreshRun(); };
   $("#res-pick").onchange = refreshResults;

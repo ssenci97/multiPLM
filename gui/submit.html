@@ -31,8 +31,12 @@
     </div>
     <div id="info" class="card info"></div>
     <div id="samples"></div>
+    <div class="card"><h3 style="margin-top:0">Models for the extraction <span class="muted small">(each switched-on backend embeds every sample on a GPU; saved with the samples and used by every run)</span></h3>
+      <div id="backends" class="backends" role="group" aria-label="Backends"></div>
+      <p id="backend-why" class="muted small"></p></div>
     <div class="toolbar">
       <button id="add" type="button" class="pill">＋ Add sample</button>
+      <button id="clear" type="button" class="pill plain" title="Empty all cards (nothing is saved until you click Save samples)">Clear</button>
       <button id="reload" type="button" class="pill plain">Load saved</button>
       <span class="grow"></span>
       <button id="save" type="button" class="pill blue">✓ Save samples</button>
@@ -45,9 +49,7 @@
         <div class="field grow"><label for="analysis">Analysis name</label><input id="analysis" type="text" placeholder="aedes_esmc_2026_11" autocomplete="off"></div>
         <div class="field"><label for="pick">Existing</label><select id="pick"><option value="">—</option></select></div>
       </div>
-      <h3>Backends <span class="muted small">(each switched-on backend embeds every sample on a GPU)</span></h3>
-      <div id="backends" class="backends" role="group" aria-label="Backends"></div>
-      <p id="backend-why" class="muted small"></p>
+      <p id="run-config" class="muted" aria-live="polite"></p>
       <div class="switches">
         <label class="switch"><input id="use-example" type="checkbox"><span></span>Run the selected example instead of the saved samples</label>
         <label class="switch"><input id="online-here" type="checkbox"><span></span>Download weights on this host (compute nodes without internet; UniProtKB samples are always downloaded on this host when you click Run)</label>

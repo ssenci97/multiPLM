@@ -38,8 +38,8 @@ slurm:
   dgx_backends:
   - esmc_6b
   dgx_partition: DGX
-  gpu_flag: --gpus=1
-  gpu_partition: GPU
+  gpu_flag: --gres=gpu:A100:1
+  gpu_partition: DGX
   gpus_max: 1
   node_fraction: 0.5
   partition: GENOA

@@ -100,7 +100,7 @@ smoke() {
     | sed 's/^/[SLURM-INFO]   /' || { log "!! container smoke test FAILED"; return 1; }
   if [ "$GPU_TEST" = --gpu ]; then
     "$app" exec --cleanenv --nv "$MP_ROOT/$sif" /opt/conda/envs/mp/bin/python -c "import torch; assert torch.cuda.is_available(), 'no GPU visible'; print(torch.cuda.get_device_name(0), 'bf16', torch.cuda.is_bf16_supported())" \
-      | sed 's/^/[SLURM-INFO]   /' || { log "!! GPU check FAILED (run on a GPU node: srun -p GPU --gpus=1 ... build.sh test --gpu)"; return 1; }
+      | sed 's/^/[SLURM-INFO]   /' || { log "!! GPU check FAILED (run on a GPU node: srun -p DGX --gres=gpu:A100:1 ... build.sh test --gpu)"; return 1; }
   fi
   log "DADApy benchmarks of Facco et al. 2017 (about a minute)"
   "$app" exec --cleanenv "$MP_ROOT/$sif" /opt/envs/dadapy/bin/python - < "$MP_ROOT/tests/dadapy_benchmarks.py" | sed 's/^/[SLURM-INFO]   /' || { log "!! DADApy benchmarks FAILED"; return 1; }
@@ -147,7 +147,7 @@ orfeo() {
   [ -s "$digests" ] && ref="$(sed -n 's/^MP_IMAGE_REF=//p' "$digests" | tail -1)"
   log "on the cluster, from the repo root:"
   log "  srun -p THIN --mem=16G -c 4 --time=01:00:00 containers/build.sh pull"
-  log "  srun -p GPU --gpus=1 -c 1 --mem=4G --time=00:15:00 containers/build.sh test --gpu"
+  log "  srun -p DGX --gres=gpu:A100:1 -c 1 --mem=4G --time=00:15:00 containers/build.sh test --gpu"
   log "  manual pull: module load singularity; singularity pull --force $sif docker://$ref"
   log "  then: python3 src/pipeline.py <analysis> --dry-run, or the console: python3 src/gui_serve.py"
 }

@@ -50,7 +50,7 @@ ORFEO facts from orfeo-doc.areasciencepark.it (read 2026-11-14):
 | Fact | Value |
 |---|---|
 | Partitions | EPYC, THIN, GENOA (CPU); GPU: 4 nodes, 2× V100 32 GB, 18 h limit; DGX: 2 nodes, 8× A100 40 GB, access not granted by default; H100 |
-| GPU requests | `--gpus=N` or `--gres=gpu:<model>:N` (since 2024-06-10) |
+| GPU requests | `--gres=gpu:<type>:N` with type V100, A100 or H100 (a bare `--gpus=N` is rejected); this project asks for A100 |
 | Default partition | none: always pass `-p` |
 | CUDA | module `cuda/12.1`; DGX needs no `module load cuda` |
 | Not documented | singularity module name, internet from compute nodes, NVIDIA driver version |
@@ -101,7 +101,7 @@ results/<analysis>/
 | 2 | workstation | `containers/build.sh lock`, then `containers/build.sh build` again (from the lock files) |
 | 3 | workstation | `MP_OWNER=<github user> MP_GITHUB_TOKEN=… containers/build.sh ship` (writes `containers/images.env`; commit it) |
 | 4 | cluster | `srun -p THIN --mem=16G -c 4 --time=01:00:00 containers/build.sh pull` |
-| 5 | GPU node | `srun -p GPU --gpus=1 -c 1 --mem=4G --time=00:15:00 containers/build.sh test --gpu` |
+| 5 | GPU node | `srun -p DGX --gres=gpu:A100:1 -c 1 --mem=4G --time=00:15:00 containers/build.sh test --gpu` |
 
 ## 7. Inputs and settings
 
@@ -190,7 +190,7 @@ The user approved these asks (2026-11-14). After the first runs, memory and time
 | Guidance | Value |
 |---|---|
 | CPU lane | one CPU node from `node_pick.sh`, at most `node_fraction` (0.5) of it; above 0.5 is refused |
-| GPU lane (pragmatic default) | 1 GPU at a time per analysis (`slurm.gpus_max: 1`); exceptionally 2, never 3+; never more than one DGX job at a time. GPUs are the scarcest shared resource; justified exceptions are agreed with the user |
+| GPU lane (pragmatic default) | 1 GPU at a time per analysis (`slurm.gpus_max: 1`); exceptionally 2, never 3+; never more than one DGX job at a time. GPUs are the scarcest shared resource; justified exceptions are agreed with the user. Default lane since 2026-11-15: `slurm.gpu_partition: DGX` with `--gres=gpu:A100:1`, so every GPU job takes the single DGX token and they run one at a time (the V100s on GPU are not used) |
 | Shards | one GPU job per (sample, backend, shard); the GPU tokens serialise them (two at a time with `gpus_max: 2`) |
 | Limits | ≤ 100 jobs per launch, ≤ 200 in your queue; one launch per analysis; another analysis downloading the same weights blocks the launch |
 
@@ -237,9 +237,10 @@ The user approved these asks (2026-11-14). After the first runs, memory and time
 | Check | Result (2026-11-14, laptop, no GPU, no image) |
 |---|---|
 | `bash -n` on all scripts | pass |
-| `pytest tests/` (fake `sbatch`, `squeue`, `sacct`, `scancel`, `sinfo`, `singularity`, `mmseqs`; fake numpy backend; stub DADApy) | 64 passed. Covered: pins and weight checksums; layer and pooling validation; batching and shards; chunk atomicity, fsync and resume (also after an unreadable last chunk); streaming merge with id order and lazy reads; a killed shard resumes identically; changed settings, a different compute dtype, non-finite values, a backend shape that disagrees with `tools.tsv`, and tampered weights all stop the job; a failed writer cannot hang the job; bf16 detection ignores emulation; dedup; the DADApy wrapper (cap, cosine, duplicates, schema) and its missing-env error; summary tables, TWO-NN rows and PCA; plan, done rule, frozen inputs, UniProt freeze, size guard, GPU lane, launch and stop; every console endpoint |
+| `pytest tests/` (fake `sbatch`, `squeue`, `sacct`, `scancel`, `sinfo`, `singularity`, `mmseqs`; fake numpy backend; stub DADApy) | 65 passed. Covered: pins and weight checksums; layer and pooling validation; batching and shards; chunk atomicity, fsync and resume (also after an unreadable last chunk); streaming merge with id order and lazy reads; a killed shard resumes identically; changed settings, a different compute dtype, non-finite values, a backend shape that disagrees with `tools.tsv`, and tampered weights all stop the job; a failed writer cannot hang the job; bf16 detection ignores emulation; dedup; the DADApy wrapper (cap, cosine, duplicates, schema) and its missing-env error; summary tables, TWO-NN rows and PCA; plan, done rule, frozen inputs, UniProt freeze, size guard, GPU lane, launch and stop; every console endpoint |
 | Example dry runs (scratch copy) | `example_toy`: 8 jobs would run (1 weights, 2 prepare, 2 embed, 2 merge, 1 summary), estimate < 0.001 GB. `example_kinase_gpcr`: 15 jobs (2 weights, 2 prepare, 2 dedup, 4 embed, 4 merge, 1 summary), 0.062 GB; ESM2 sees 171 018 kinase residues against 194 473 for ESMC because of its 1022-residue truncation |
-| **Not verified** | image build (no local build on purpose), so the dadapy venv, its C extensions and the paper benchmarks with real DADApy; any real backend forward pass; real MMseqs2; weight downloads; real SLURM, `--nv`, DGX driver vs CUDA 12.1; internet from compute nodes; the console page in a browser |
+| **Verified 2026-11-15** | image built from the lock files on the workstation (12.4 GB, digest in `containers/images.env`) and pulled as a 3.6 GB `.sif` on the cluster; smoke test of torch 2.4.1+cu121, esm-evo, esm-fair, MMseqs2 and DADApy 0.3.4 on a THIN node; the paper benchmarks with the real DADApy (14.05, 2.12, 22.29, 0.05); downloads of the ten pinned weight sets with sha256 recorded in `configs/checksums/` |
+| **Not verified** | any real backend forward pass; real MMseqs2 on data; real SLURM submission by the pipeline; `--nv` and the DGX driver vs CUDA 12.1 (`containers/build.sh test --gpu` on DGX); DGX access for this account; ESMC 6B weights (not downloaded); internet from compute nodes; the console page in a browser |
 
 ## 16. Troubleshooting
 

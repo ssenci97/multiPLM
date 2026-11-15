@@ -39,7 +39,7 @@ GPU_RES = {
     "prott5_xl_half": (2, 8000, 240), "prostt5": (2, 16000, 240),
 }
 GPU_WHY = "2 cores: reader and writer threads beside the GPU loop; memory: CUDA/torch runtime (~3 GB) + the checkpoint held in host RAM while it loads (6B: one 5 GB shard at a time)"
-SLURM = dict(partition="GENOA", gpu_partition="GPU", dgx_partition="DGX", dgx_backends=["esmc_6b"], gpu_flag="--gpus=1", gpus_max=1, node_fraction=0.5)
+SLURM = dict(partition="GENOA", gpu_partition="DGX", dgx_partition="DGX", dgx_backends=["esmc_6b"], gpu_flag="--gres=gpu:A100:1", gpus_max=1, node_fraction=0.5)
 BUDGET_CPUS, BUDGET_MEM_MB = 32, 64000
 MEM_MIN, MEM_MAX, GPU_MEM_MAX, TIME_MIN, TIME_MAX, SAFETY, CPU_SAFETY, CPU_MAX, CPU_HOT = 1000, 32000, 64000, 15, 2880, 1.25, 1.25, 8, 0.9
 MAX_JOBS, MAX_USER_JOBS, STOP_WAIT, STOP_PAUSE = 100, 200, 120, 2

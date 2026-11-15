@@ -49,11 +49,11 @@ summarize:
     max_components: 50
 slurm:
   partition: GENOA
-  gpu_partition: GPU
+  gpu_partition: DGX
   dgx_partition: DGX
   dgx_backends:
   - esmc_6b
-  gpu_flag: --gpus=1
+  gpu_flag: --gres=gpu:A100:1
   gpus_max: 1
   node_fraction: 0.5
 gui_serve:

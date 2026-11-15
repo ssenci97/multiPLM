@@ -93,14 +93,11 @@ def test_gpu_lane_one_gpu_at_a_time_by_default(repo):
     spans = sorted((sch["start"][k], sch["end"][k]) for k in gpu)
     assert all(a[1] <= b[0] for a, b in zip(spans, spans[1:]))
 
-def test_gpu_lane_two_gpus_but_one_dgx_job(repo):
+def test_all_gpu_jobs_on_dgx_one_at_a_time(repo):
     jobs, sch = gpu_schedule(repo, "d", ["esmc_6b", "esmc_300m"], 2)
-    by = {j["key"]: j for j in jobs}
-    assert by["embed.esmc_6b.globins.1"]["partition"] == "DGX" and by["embed.esmc_300m.globins.1"]["partition"] == "GPU"
-    dgx = sorted((sch["start"][k], sch["end"][k]) for k in sch["order"] if k.startswith("embed.esmc_6b."))
-    assert dgx[0][1] <= dgx[1][0]
-    starts = [sch["start"][k] for k in sch["order"] if k.startswith("embed.")]
-    assert max(starts.count(s) for s in starts) <= 2
+    assert {x["partition"] for x in jobs if x["key"].startswith("embed.")} == {"DGX"}
+    iv = sorted((sch["start"][k], sch["end"][k]) for k in sch["order"] if k.startswith("embed."))
+    assert len(iv) >= 2 and all(a[1] <= b[0] for a, b in zip(iv, iv[1:]))
 
 def test_launch_with_fake_slurm(repo, fakebin):
     make(repo, backends=["esmc_300m"])
@@ -108,8 +105,8 @@ def test_launch_with_fake_slurm(repo, fakebin):
     assert sum(j["state"] == "submitted" for j in out) == 8
     log = (fakebin / "sbatch.log").read_text().splitlines()
     embed = [l for l in log if "embed.esmc_300m" in l]
-    assert all(" -p GPU " in l and " --gpus=1 " in l and "--dependency=afterok:" in l for l in embed)
-    assert all("--gpus" not in l and " -c 1 --mem=1000 " in l for l in log if "embed." not in l) and sum("merge." in l for l in log) == 2
+    assert all(" -p DGX " in l and " --gres=gpu:A100:1 " in l and "--dependency=afterok:" in l for l in embed)
+    assert all("--gres" not in l and " -c 1 --mem=1000 " in l for l in log if "embed." not in l) and sum("merge." in l for l in log) == 2
     assert "afterany:" in embed[1]
     rows = pipeline.read_jobs("toy", str(repo))
     assert [r["gpu"] for r in rows if r["key"].startswith("embed.")] == ["1", "1"]

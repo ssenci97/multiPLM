@@ -103,7 +103,7 @@ smoke() {
       | sed 's/^/[SLURM-INFO]   /' || { log "!! GPU check FAILED (run on a GPU node: srun -p GPU --gpus=1 ... build.sh test --gpu)"; return 1; }
   fi
   log "DADApy benchmarks of Facco et al. 2017 (about a minute)"
-  "$app" exec --cleanenv --bind "$MP_ROOT" "$MP_ROOT/$sif" /opt/envs/dadapy/bin/python "$MP_ROOT/tests/dadapy_benchmarks.py" | sed 's/^/[SLURM-INFO]   /' || { log "!! DADApy benchmarks FAILED"; return 1; }
+  "$app" exec --cleanenv "$MP_ROOT/$sif" /opt/envs/dadapy/bin/python - < "$MP_ROOT/tests/dadapy_benchmarks.py" | sed 's/^/[SLURM-INFO]   /' || { log "!! DADApy benchmarks FAILED"; return 1; }
   log "container smoke test passed"
 }
 find_app() {

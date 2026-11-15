@@ -31,7 +31,7 @@ def resolve_layers(spec: dict, layers: object) -> list[int]:
 
     Args:
         spec (dict): Registry row with n_layers and layers (all or last).
-        layers (object): 'all', an int, or a list of ints.
+        layers (object): 'all' (every layer the backend exposes: only the last for last-layer-only backends), an int, or a list of ints.
 
     Returns:
         list[int]: Block numbers.
@@ -40,7 +40,7 @@ def resolve_layers(spec: dict, layers: object) -> list[int]:
         ValueError: An index outside the model, or a non-final layer for a backend that exposes only the last one.
     """
     n = spec["n_layers"]
-    want = list(range(1, n + 1)) if layers == "all" else [layers] if isinstance(layers, int) else list(layers or [-1])
+    want = ([n] if spec["layers"] == "last" else list(range(1, n + 1))) if layers == "all" else [layers] if isinstance(layers, int) else list(layers or [-1])
     out = []
     for k in want:
         if not isinstance(k, int) or k == 0 or abs(k) > n: raise ValueError(f"{spec['name']}: layer {k!r} outside 1..{n} / -1..-{n}")

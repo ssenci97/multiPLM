@@ -71,3 +71,8 @@ def test_prepare_validates_records(tmp_path):
     assert out.read_text() == ">a desc\nMKVLL\n>d\nMKVL\n"
     s = json.loads((tmp_path / "o.json").read_text())
     assert s["kept"] == 2 and s["records"] == 5 and s["status"] == {"invalid:duplicate_id": 1, "invalid:empty": 1, "invalid:letters": 1, "kept": 2}
+
+def test_all_layers_means_last_for_last_layer_only_backends():
+    from backends import registry, resolve_layers
+    reg = registry(f"{ROOT}/configs/tools.tsv")
+    assert resolve_layers(reg["esm3_sm_open_v1"], "all") == [48] and resolve_layers(reg["esm2_t6_8M"], "all") == list(range(1, 7))

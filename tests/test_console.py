@@ -83,9 +83,9 @@ def test_uniprot_example_downloads_on_run_and_plans_every_step(server):
         assert sorted(p.name for p in (a / "inputs" / "uniprot").glob("*.fasta")) == ["HSP70.fasta", "HSP90.fasta", "sHSP.fasta"]
         assert (a / "inputs" / "uniprot" / "sHSP.fasta").read_text().count(">") == 381 and "prefetch.py" in (a / "run.log").read_text()
         st = json.loads(get(base, "/api/status?analysis=ch_chaperones")[1])
-        assert {s["step"]: s["total"] for s in st["steps"]} == {"00_weights": 1, "01_prepare": 3, "02_dedup": 3, "03_embed": 3, "04_merge": 3, "05_summary": 1}
+        assert {s["step"]: s["total"] for s in st["steps"]} == {"00_weights": 4, "01_prepare": 3, "02_dedup": 3, "03_embed": 12, "04_merge": 12, "05_summary": 1}
         assert st["size"]["proteins"] == {"sHSP": 381, "HSP70": 319, "HSP90": 101} and st["size"]["hard"] == []
-        assert len((fb / "sbatch.log").read_text().splitlines()) == 14
+        assert len((fb / "sbatch.log").read_text().splitlines()) == 35
     finally: srv.shutdown()
 
 def test_uniprot_example_above_the_count_cap_saves_and_submits_nothing(server):

@@ -8,6 +8,9 @@ dedup:
 embed:
   allow_cpu: false
   backends:
+  - esm2_t33_650M
+  - esm3_sm_open_v1
+  - prostt5
   - esmc_300m
   batch_tokens: 4096
   dtype: auto
@@ -46,12 +49,15 @@ slurm:
 summarize:
   norm_bins: 20
   pairs: 2000
+  embed2d:
+    enabled: true
+    max_points: 1000
   pca:
     enabled: true
     hex_bins: 30
     max_components: 50
     per_sample_cap: 1000
-    per_sample_pca: false
+    per_sample_pca: true
   twonn:
     enabled: true
     max_points: 10000

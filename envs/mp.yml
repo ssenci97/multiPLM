@@ -1,0 +1,23 @@
+name: mp
+channels: [conda-forge, bioconda, nodefaults]
+dependencies:
+  - python=3.10
+  - pip=24.2
+  - numpy=1.26.4
+  - h5py=3.11.0
+  - pyyaml=6.0.2
+  - tqdm=4.66.5
+  - mmseqs2=18.8cc5c
+  - git
+  - curl
+  - time
+  - util-linux
+  - ca-certificates
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu121
+      - torch==2.4.1+cu121
+      - transformers==4.48.1
+      - tokenizers==0.21.0
+      - sentencepiece==0.2.0
+      - huggingface-hub==0.27.1
+      - safetensors==0.5.2

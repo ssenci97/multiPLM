@@ -1,0 +1,3 @@
+sample_id	fasta_path	uniprot_query	description
+globins	globins.fasta		five human globins (UniProt 2026_04)
+small_proteins	small_proteins.fasta		five small human proteins (UniProt 2026_04)

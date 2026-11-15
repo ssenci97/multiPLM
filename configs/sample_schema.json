@@ -1,0 +1,15 @@
+{
+  "title": "MultiPLM samples",
+  "sheet_columns": ["sample_id", "fasta_path", "uniprot_query", "description"],
+  "info": "One sample = one set of proteins. Give either a local FASTA (absolute path on the cluster) or a UniProtKB query; each sample is embedded with every backend ticked in the Run tab. Records are validated (amino-acid letters, unique ids, length bounds) before embedding.",
+  "groups": [
+    {"name": "Sample", "fields": [
+      {"id": "sample_id", "label": "Sample ID", "type": "text", "required": true, "pattern": "^[A-Za-z0-9_]+$", "help": "letters, digits, underscore (e.g. aedes_immune)"},
+      {"id": "description", "label": "Description", "type": "text", "required": false, "help": "free text, kept in the metadata"}
+    ]},
+    {"name": "Proteins", "source": true, "fields": [
+      {"id": "fasta_path", "label": "Local FASTA", "type": "text", "required": false, "help": "absolute path, .fa .faa .fasta .fas"},
+      {"id": "uniprot_query", "label": "UniProtKB query", "type": "text", "required": false, "help": "e.g. (organism_id:7159) AND reviewed:true"}
+    ]}
+  ]
+}

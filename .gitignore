@@ -1,0 +1,11 @@
+data/
+results/
+containers/*.sif
+.singularity/
+.mp_bin/
+__pycache__/
+*.partial.h5
+configs/param_configs.yaml.bak
+configs/param_configs.yaml.tmp
+.hf_token
+.pytest_cache/

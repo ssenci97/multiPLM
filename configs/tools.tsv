@@ -1,0 +1,16 @@
+name	kind	family	env	repo	commit	files	size_gb	dim	n_layers	layers	licence
+esm-evo	software	-	esm-evo	https://github.com/evolutionaryscale/esm	be185fb05e1aa3ccfda4e7bd10e1d341f81489a2	-	-	-	-	-	Cambrian Open License (code, tag v3.2.1)
+fair-esm	software	-	esm-fair	https://github.com/facebookresearch/esm	0b59d87ebef95948c735b1f7aad463dc6dfa991b	-	-	-	-	-	MIT (tag v2.0.0)
+mmseqs2	software	-	mp	https://github.com/soedinglab/MMseqs2	8cc5ce367b5638c4306c2d7cfc652dd099a4643f	-	-	-	-	-	MIT at tag 18-8cc5c (GPL-3.0 up to release 15; MIT from release 16) (bioconda mmseqs2=18.8cc5c)
+dadapy	software	-	dadapy	https://pypi.org/project/dadapy/0.3.4/	sha256:6907f08b4323de86d84ca985c9c403efd49ae9b5ab2da37315d975b68634244b	dadapy-0.3.4.tar.gz	-	-	-	-	Apache-2.0 (PyPI sdist 0.3.4, uploaded 2026-05-01)
+esm2_t6_8M	weights	esm2	esm-fair	https://dl.fbaipublicfiles.com/fair-esm	0b59d87ebef95948c735b1f7aad463dc6dfa991b	esm2_t6_8M_UR50D.pt,esm2_t6_8M_UR50D-contact-regression.pt	0.03	320	6	all	MIT
+esm2_t12_35M	weights	esm2	esm-fair	https://dl.fbaipublicfiles.com/fair-esm	0b59d87ebef95948c735b1f7aad463dc6dfa991b	esm2_t12_35M_UR50D.pt,esm2_t12_35M_UR50D-contact-regression.pt	0.14	480	12	all	MIT
+esm2_t30_150M	weights	esm2	esm-fair	https://dl.fbaipublicfiles.com/fair-esm	0b59d87ebef95948c735b1f7aad463dc6dfa991b	esm2_t30_150M_UR50D.pt,esm2_t30_150M_UR50D-contact-regression.pt	0.6	640	30	all	MIT
+esm2_t33_650M	weights	esm2	esm-fair	https://dl.fbaipublicfiles.com/fair-esm	0b59d87ebef95948c735b1f7aad463dc6dfa991b	esm2_t33_650M_UR50D.pt,esm2_t33_650M_UR50D-contact-regression.pt	2.6	1280	33	all	MIT
+esm2_t36_3B	weights	esm2	esm-fair	https://dl.fbaipublicfiles.com/fair-esm	0b59d87ebef95948c735b1f7aad463dc6dfa991b	esm2_t36_3B_UR50D.pt,esm2_t36_3B_UR50D-contact-regression.pt	11.4	2560	36	all	MIT
+esm3_sm_open_v1	weights	esm3	esm-evo	https://huggingface.co/biohub/esm3-sm-open-v1	47f0545b2b6daf26a93439a3cd610f4f7f3d5478	*	5.5	1536	48	last	see model card (HF API 2026-11-14: no licence tag, not gated)
+esmc_300m	weights	esmc	esm-evo	https://huggingface.co/biohub/esmc-300m-2024-12	7f10b20ae75017b2dbc884070e03434515709a8d	*	1.33	960	30	all	MIT + Biohub AUP (HF model card)
+esmc_600m	weights	esmc	esm-evo	https://huggingface.co/biohub/esmc-600m-2024-12	e4d83bc7e10fd55c92e598e545f4a76bf04a6e5c	*	2.3	1152	36	all	MIT + Biohub AUP (HF model card)
+esmc_6b	weights	esmc6b	esm-evo	https://huggingface.co/biohub/ESMC-6B	94605596759c3216963f6b7e5ff7adc1994c95f0	*.safetensors,*.json	25.41	2560	80	all	MIT + Biohub AUP (HF model card)
+prott5_xl_half	weights	prott5	mp	https://huggingface.co/Rostlab/prot_t5_xl_half_uniref50-enc	94a6abc029ae13029317b140b7424e012bf8dfbf	*.json,*.model,*.bin	2.42	1024	24	all	see model card (HF API 2026-11-14: no licence tag)
+prostt5	weights	prostt5	mp	https://huggingface.co/Rostlab/ProstT5	d7d097d5bf9a993ab8f68488b4681d6ca70db9e5	*.json,*.model,*.bin	11.28	1024	24	all	MIT

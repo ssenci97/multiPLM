@@ -1,0 +1,11 @@
+*
+!envs/mp.yml
+!envs/esm-evo.txt
+!envs/dadapy.txt
+!containers/mp.lock.txt
+!containers/mp.pip.lock.txt
+!containers/esm-evo.lock.txt
+!containers/dadapy.lock.txt
+!LICENSES
+!LICENSES/**
+!LICENSES.md

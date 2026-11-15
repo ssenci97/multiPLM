@@ -1,0 +1,61 @@
+dedup:
+  cov_mode: 0
+  coverage: 0.8
+  enabled: true
+  min_seq_id: 0.95
+  mode: easy-linclust
+  scope: sample
+embed:
+  allow_cpu: false
+  backends:
+  - esm2_t6_8M
+  - esmc_300m
+  batch_tokens: 4096
+  dtype: auto
+  flush_mb: 256
+  flush_proteins: 2000
+  layers: all
+  max_length: 0
+  pooling:
+  - mean
+  shard_proteins: 25000
+  size_cap_gb: 500
+  size_warn_gb: 50
+  store_dtype: float32
+  verify_weights: full
+gui_serve:
+  host: 127.0.0.1
+  port: 8000
+merge:
+  keep_chunks: false
+  max_part_gb: 20.0
+prefetch:
+  reviewed_only: false
+prepare:
+  max_length: 0
+  min_length: 1
+slurm:
+  dgx_backends:
+  - esmc_6b
+  dgx_partition: DGX
+  gpu_flag: --gpus=1
+  gpu_partition: GPU
+  gpus_max: 1
+  node_fraction: 0.5
+  partition: GENOA
+summarize:
+  norm_bins: 20
+  pairs: 2000
+  pca:
+    enabled: true
+    hex_bins: 30
+    max_components: 50
+    per_sample_cap: 1000
+    per_sample_pca: false
+  twonn:
+    enabled: true
+    max_points: 10000
+    mu_fraction: 0.9
+    n_min: 20
+    metric: euclidean
+    tokens: true

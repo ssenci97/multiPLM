@@ -1,0 +1,7 @@
+dadapy @ https://files.pythonhosted.org/packages/2a/af/ba5c755a86acf8aca641bbedfbbabaf52c8c3f12250ae80c6475f9831146/dadapy-0.3.4.tar.gz#sha256=6907f08b4323de86d84ca985c9c403efd49ae9b5ab2da37315d975b68634244b
+numpy==1.26.4
+scipy==1.14.1
+scikit-learn==1.5.2
+jax==0.4.30
+jaxlib==0.4.30
+flax==0.8.5

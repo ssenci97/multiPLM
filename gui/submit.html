@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MultiPLM console</title>
+<link rel="stylesheet" href="submit.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <pattern id="hatch" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#ffffff" stroke-width="2.5"/></pattern>
+  </defs>
+</svg>
+<header>
+  <div class="brand"><h1>MultiPLM</h1><p id="runtime" class="runtime" aria-live="polite">…</p></div>
+  <div class="head-right">
+    <nav class="seg" role="tablist" aria-label="Console sections">
+      <button type="button" role="tab" data-tab="samples" aria-selected="true" class="on">Samples</button>
+      <button type="button" role="tab" data-tab="run" aria-selected="false">Run</button>
+      <button type="button" role="tab" data-tab="results" aria-selected="false">Results</button>
+    </nav>
+    <button id="theme" type="button" class="pill plain" title="Switch light / dark theme" aria-pressed="false">◐ Theme</button>
+    <button id="perf-toggle" type="button" class="pill perf-btn" aria-pressed="false" title="Performance: cluster nodes, GPUs and job efficiency">◆ Performance</button>
+  </div>
+</header>
+<main id="console">
+  <section id="tab-samples" role="tabpanel" aria-label="Samples">
+    <div class="toolbar">
+      <button id="toggle-info" type="button" class="pill black" aria-expanded="true" aria-controls="info">Hide info</button>
+      <label class="sr" for="example">Example</label><select id="example" class="inline" title="Show an example (read-only)"></select>
+    </div>
+    <div id="info" class="card info"></div>
+    <div id="samples"></div>
+    <div class="toolbar">
+      <button id="add" type="button" class="pill">＋ Add sample</button>
+      <button id="reload" type="button" class="pill plain">Load saved</button>
+      <span class="grow"></span>
+      <button id="save" type="button" class="pill blue">✓ Save samples</button>
+    </div>
+    <pre id="samples-status" class="note" role="status" hidden></pre>
+  </section>
+  <section id="tab-run" role="tabpanel" aria-label="Run" hidden>
+    <div class="card">
+      <div class="row">
+        <div class="field grow"><label for="analysis">Analysis name</label><input id="analysis" type="text" placeholder="aedes_esmc_2026_11" autocomplete="off"></div>
+        <div class="field"><label for="pick">Existing</label><select id="pick"><option value="">—</option></select></div>
+      </div>
+      <h3>Backends <span class="muted small">(each ticked backend embeds every sample on a GPU)</span></h3>
+      <div id="backends" class="backends" role="group" aria-label="Backends"></div>
+      <p id="backend-why" class="muted small"></p>
+      <div class="row">
+        <label class="check"><input id="use-example" type="checkbox"> Run the selected example instead of the saved samples</label>
+        <label class="check"><input id="online-here" type="checkbox"> Download weights on this host (compute nodes without internet; UniProt: run src/prefetch.py)</label>
+        <label class="check"><input id="allow-large" type="checkbox"> Allow output above the size cap</label>
+      </div>
+      <div class="toolbar">
+        <button id="run" type="button" class="pill blue">▶ Run on SLURM</button>
+        <button id="stop" type="button" class="pill red">■ Stop</button>
+        <button id="stop-all" type="button" class="pill red">■ Stop all</button>
+        <label class="check"><input id="auto" type="checkbox" checked> Auto-refresh</label>
+        <span id="run-state" class="badge idle">idle</span>
+      </div>
+      <p id="size" class="muted small" aria-live="polite"></p>
+      <div id="progress"></div>
+    </div>
+    <div id="steps"></div>
+    <details class="card"><summary>SLURM queue (this analysis)</summary><div id="queue"></div></details>
+    <details class="card"><summary>Node and GPU lane choice</summary><pre id="node-log" class="log"></pre></details>
+    <details class="card"><summary>Run log</summary><pre id="run-log" class="log"></pre></details>
+    <pre id="run-status" class="note" role="status" hidden></pre>
+  </section>
+  <section id="tab-results" role="tabpanel" aria-label="Results" hidden>
+    <div class="card row"><div class="field"><label for="res-pick">Analysis</label><select id="res-pick"><option value="">—</option></select></div></div>
+    <div class="card"><h3>Embeddings (sample × backend)</h3><p class="muted small">✓ = merged file present (proteins × dimensions, stored keys); ○ = not produced yet.</p><div id="matrix"></div></div>
+    <div class="card"><h3>Records per sample</h3><div id="records-legend" class="legend"></div><div id="records"></div></div>
+    <div class="card"><h3>Aggregates</h3><p class="muted small">Computed by the summary job from cheap statistics; raw vectors never reach the browser.</p><div class="row"><div class="field"><label for="agg-backend">Backend</label><select id="agg-backend" class="inline"></select></div><div class="field"><label for="agg-layer">Representation (layer / pooling)</label><select id="agg-layer" class="inline"></select></div></div><div id="charts"></div></div>
+    <div class="card"><h3>Intrinsic dimension (TWO-NN)</h3><p class="muted small">Computed with DADApy (Glielmo et al. 2022, doi:10.1016/j.patter.2022.100589), method of Facco, d'Errico, Rodriguez, Laio (2017) Sci Rep 7:12140, doi:10.1038/s41598-017-11873-y. Read d(N) as a curve: a plateau over N is the relevant dimension; very small N falls toward 1, noise inflates d at large N.</p><div id="twonn"></div></div>
+    <div class="card"><h3>PCA (joint fit, hexbin densities)</h3><p class="muted small">Fit on a balanced subsample, every vector projected; densities only. Off by default (summarize.pca.enabled).</p><div id="pca"></div></div>
+    <div class="card"><h3>Weights used</h3><div id="weights"></div></div>
+    <details class="card"><summary>Per-sample provenance (JSON)</summary><pre id="meta" class="log"></pre></details>
+  </section>
+</main>
+<main id="perf" class="perf" hidden aria-label="Performance">
+  <div class="toolbar"><h2>Performance</h2><span class="grow"></span><span id="perf-at" class="muted"></span><button id="perf-back" type="button" class="pill">← Back to console</button></div>
+  <p id="perf-summary" class="perf-summary"></p>
+  <div class="legend perf-legend"><span><i class="sw ours"></i>◆ ours (running jobs, amber stripes)</span><span><i class="sw others"></i>other users</span><span><i class="sw free"></i>free</span></div>
+  <h3>Partitions</h3><div id="partitions"></div>
+  <h3>Nodes <span class="muted small">(◆ = runs our jobs; outline = ours)</span></h3><div id="nodes" class="tiles"></div>
+  <h3>Throughput per backend <span class="muted small">(proteins per GPU-job hour, from the shard markers)</span></h3><div id="throughput"></div>
+  <h3>Per backend / job type</h3><div id="per-tool"></div>
+  <h3>Per analysis</h3><div id="per-analysis"></div>
+  <h3>Jobs</h3><div id="jobs"></div>
+</main>
+<script src="submit.js"></script>
+</body>
+</html>

@@ -129,6 +129,7 @@ pull() {
   export SINGULARITY_TMPDIR="${SINGULARITY_TMPDIR:-$SINGULARITY_CACHEDIR/tmp}"; export APPTAINER_TMPDIR="$SINGULARITY_TMPDIR"
   mkdir -p "$SINGULARITY_TMPDIR"
   if [ -z "${SINGULARITY_DOCKER_USERNAME:-}" ] && [ -t 0 ]; then read -rp "[SLURM-INFO] ghcr.io username (empty = anonymous, public image only): " SINGULARITY_DOCKER_USERNAME || true; fi
+  if [[ "${SINGULARITY_DOCKER_USERNAME:-}" =~ ^(ghp_|gho_|ghu_|ghs_|github_pat_) ]]; then log "!! that looks like a token, not a username: revoke it on GitHub and rerun (the username prompt is not hidden)"; exit 1; fi
   if [ -n "${SINGULARITY_DOCKER_USERNAME:-}" ] && [ -z "${SINGULARITY_DOCKER_PASSWORD:-}" ] && [ -t 0 ]; then read -rsp "[SLURM-INFO] ghcr.io token for $SINGULARITY_DOCKER_USERNAME (read:packages): " SINGULARITY_DOCKER_PASSWORD || true; echo; fi
   if [ -n "${SINGULARITY_DOCKER_USERNAME:-}" ] && [ -n "${SINGULARITY_DOCKER_PASSWORD:-}" ]; then export SINGULARITY_DOCKER_USERNAME SINGULARITY_DOCKER_PASSWORD APPTAINER_DOCKER_USERNAME="$SINGULARITY_DOCKER_USERNAME" APPTAINER_DOCKER_PASSWORD="$SINGULARITY_DOCKER_PASSWORD"; log "registry login as $SINGULARITY_DOCKER_USERNAME"; else unset SINGULARITY_DOCKER_USERNAME SINGULARITY_DOCKER_PASSWORD; log "anonymous registry access (no username/token)"; fi
   avail=$(df -Pk "$MP_ROOT" | awk 'NR==2{print int($4/1048576)}')

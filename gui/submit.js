@@ -55,12 +55,15 @@ function collect(cards) {
 }
 function showSamples(list, ro) { const box = $("#samples"); box.innerHTML = ""; list.forEach(s => box.append(card(s, ro))); ["#add", "#save"].forEach(b => { $(b).disabled = !!ro; }); }
 function clearSamples() { showSamples([]); $("#example").value = ""; const st = $("#samples-status"); st.hidden = false; st.textContent = "Cards cleared. Nothing is saved until you click Save samples."; }
+const OPTS = ["dedup", "twonn", "pca", "tsne", "umap", "all_layers"];
+function pickedOptions() { return Object.fromEntries(OPTS.map(k => [k, $("#opt-" + k).checked])); }
+function showOptions(o, ro) { OPTS.forEach(k => { $("#opt-" + k).checked = !!o[k]; $("#opt-" + k).disabled = !!ro; }); }
 function pickedBackends() { return [...$("#backends").querySelectorAll("input:checked")].map(x => x.value); }
 function showBackends(names, ro) { $("#backends").querySelectorAll("input").forEach(i => { i.checked = names.includes(i.value); i.disabled = !!ro; }); }
-async function loadSaved() { const r = await api("/api/samples"); showSamples(r.samples.length ? r.samples : [{}]); $("#example").value = ""; if ($("#backends").children.length) showBackends(saved, false); }
+async function loadSaved() { const r = await api("/api/samples"); showSamples(r.samples.length ? r.samples : [{}]); $("#example").value = ""; if ($("#backends").children.length) { showBackends(saved, false); showOptions(await api("/api/options"), false); } }
 async function saveSamples() {
   const st = $("#samples-status"); st.hidden = false;
-  try { const names = pickedBackends(); if (!names.length) throw { errors: ["switch on at least one model"] }; const r = await api("/api/samples", { samples: collect() }); await api("/api/backends", { backends: names }); saved = names; st.textContent = `✓ saved ${r.n} sample(s) to ${r.samples_tsv} and models ${names.join(", ")}`; }
+  try { const names = pickedBackends(); if (!names.length) throw { errors: ["switch on at least one model"] }; const r = await api("/api/samples", { samples: collect() }); await api("/api/backends", { backends: names }); await api("/api/options", pickedOptions()); saved = names; st.textContent = `✓ saved ${r.n} sample(s) to ${r.samples_tsv} and models ${names.join(", ")}`; }
   catch (e) { st.textContent = "✕ " + (e.errors || [JSON.stringify(e)]).join("\n✕ "); }
 }
 
@@ -168,7 +171,7 @@ function embed2dCharts(A, b, key, P) {
   const pca = P && P.points ? scatter("PCA", P.points) : "";
   if (!E && !pca) { box.innerHTML = '<p class="muted">no 2D embedding for this representation (summarize.embed2d.enabled is off, or it is computed for the last layer only)</p>'; return; }
   if (E && E.skipped) { box.innerHTML = pca + `<p class="muted">t-SNE and UMAP skipped (${esc(E.skipped)}): they are only drawn when every point can be shown, without subsampling.</p>`; return; }
-  box.innerHTML = `${legend(E ? E.samples : Object.keys(P.points))}<div class="panels">${pca}${E ? scatter("t-SNE", by(E.tsne, E.labels)) + scatter("UMAP", by(E.umap, E.labels)) : ""}</div><p class="muted small">All ${E ? E.points : ""} points shown, no subsampling. Distances between far-apart clusters are not meaningful in t-SNE or UMAP; use them to see grouping, not to measure.</p>`;
+  box.innerHTML = `${legend(E ? E.samples : Object.keys(P.points))}<div class="panels">${pca}${E ? (E.tsne ? scatter("t-SNE", by(E.tsne, E.labels)) : "") + (E.umap ? scatter("UMAP", by(E.umap, E.labels)) : "") : ""}</div><p class="muted small">All ${E ? E.points : ""} points shown, no subsampling. Distances between far-apart clusters are not meaningful in t-SNE or UMAP; use them to see grouping, not to measure.</p>`;
 }
 function hexPanel(name, P, cells, max, W = 230) {
   const [x0, x1, y0, y1] = P.box, n = P.bins, sx = (x1 - x0) / n, sy = (y1 - y0) / n * Math.sqrt(3), H = W * (y1 - y0) / ((x1 - x0) || 1) || W, kx = W / (x1 - x0), ky = H / (y1 - y0), r = sx * kx / Math.sqrt(3) * 1.05;
@@ -239,8 +242,8 @@ async function init() {
   $("#toggle-info").onclick = () => { const h = !$("#info").hidden; $("#info").hidden = h; store.set("hideInfo", h); $("#toggle-info").textContent = h ? "Show info" : "Hide info"; $("#toggle-info").setAttribute("aria-expanded", !h); };
   $("#example").innerHTML = '<option value="">Saved samples (editable)</option>' + examples.map(e => `<option value="${esc(e.name)}">${esc(e.title)}</option>`).join("") + (examples.length > 1 ? '<option value="__all">All examples (read-only)</option>' : "");
   $("#example").onchange = () => { const v = $("#example").value; if (!v) return loadSaved(); const st = $("#samples-status"); st.hidden = false;
-    if (v === "__all") { showSamples(examples.flatMap(e => e.samples), true); showBackends([...new Set(examples.flatMap(e => e.backends))], true); st.textContent = "All examples (read-only): each runs as its own analysis with its own parameters. Go to Run, switch on 'Run the selected example', and start."; return; }
-    const e = examples.find(x => x.name === v); showSamples(e.samples.map(s => ({ ...s }))); showBackends(e.backends, false); st.textContent = `${e.title} — models ${e.backends.join(", ")} — ${e.credit}\n\nThe cards are editable. Click Save samples to use them (it replaces the saved samples and models).`; };
+    if (v === "__all") { showSamples(examples.flatMap(e => e.samples), true); showBackends([...new Set(examples.flatMap(e => e.backends))], true); showOptions(Object.fromEntries(OPTS.map(k => [k, examples.some(e => e.options[k])])), true); st.textContent = "All examples (read-only): each runs as its own analysis with its own parameters. Go to Run, switch on 'Run the selected example', and start."; return; }
+    const e = examples.find(x => x.name === v); showSamples(e.samples.map(s => ({ ...s }))); showBackends(e.backends, false); showOptions(e.options, false); st.textContent = `${e.title} — models ${e.backends.join(", ")} — ${e.credit}\n\nThe cards are editable. Click Save samples to use them (it replaces the saved samples and models).`; };
   document.querySelectorAll(".seg button[data-tab]").forEach(b => b.onclick = () => setTab(b.dataset.tab));
   $("#clear").onclick = clearSamples; $("#add").onclick = () => $("#samples").append(card({})); $("#reload").onclick = loadSaved; $("#save").onclick = saveSamples;
   $("#run").onclick = run; $("#stop").onclick = () => stop(false); $("#stop-all").onclick = () => stop(true);
@@ -250,6 +253,6 @@ async function init() {
   $("#perf-toggle").onclick = () => setPerf($("#perf").hidden); $("#perf-back").onclick = () => setPerf(false);
   timer = setInterval(() => { if ($("#auto").checked && !$("#tab-run").hidden) refreshRun(); }, 5000);
   const q = new URLSearchParams(location.search); if (q.get("analysis")) store.set("res", q.get("analysis"));
-  await loadSaved(); await loadBackends(); setTab(q.get("tab") || store.get("tab", "samples")); if (location.hash === "#perf") setPerf(true);
+  await loadSaved(); await loadBackends(); showOptions(await api("/api/options"), false); setTab(q.get("tab") || store.get("tab", "samples")); if (location.hash === "#perf") setPerf(true);
 }
 init().catch(e => { document.body.insertAdjacentHTML("afterbegin", `<pre class="note">✕ console failed to load: ${esc(e.message || JSON.stringify(e))}</pre>`); });

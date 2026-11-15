@@ -34,6 +34,15 @@
     <div class="card"><h3 style="margin-top:0">Models for the extraction <span class="muted small">(each switched-on backend embeds every sample on a GPU; saved with the samples and used by every run)</span></h3>
       <div id="backends" class="backends" role="group" aria-label="Backends"></div>
       <p id="backend-why" class="muted small"></p></div>
+    <div class="card"><h3 style="margin-top:0">Analyses <span class="muted small">(saved with the samples; each is computed in the summary job)</span></h3>
+      <div class="switches">
+        <label class="switch"><input id="opt-dedup" type="checkbox"><span></span>MMseqs2 deduplication (0.95 identity, per sample)</label>
+        <label class="switch"><input id="opt-all_layers" type="checkbox"><span></span>Keep every layer (needed for intrinsic dimension and PCA by layer; off = last layer only)</label>
+        <label class="switch"><input id="opt-twonn" type="checkbox"><span></span>Intrinsic dimension (TWO-NN)</label>
+        <label class="switch"><input id="opt-pca" type="checkbox"><span></span>PCA</label>
+        <label class="switch"><input id="opt-tsne" type="checkbox"><span></span>t-SNE (only below 1000 points, no subsampling)</label>
+        <label class="switch"><input id="opt-umap" type="checkbox"><span></span>UMAP (only below 1000 points, no subsampling)</label>
+      </div></div>
     <div class="toolbar">
       <button id="add" type="button" class="pill">＋ Add sample</button>
       <button id="reload" type="button" class="pill plain">Load saved</button>

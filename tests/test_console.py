@@ -96,3 +96,11 @@ def test_uniprot_example_above_the_count_cap_saves_and_submits_nothing(server):
         assert code == 400 and "HSP70: 501 entries exceed the prefetch.max_entries of 500" in r["errors"][0] and "nothing was saved" in r["errors"][0], r
         assert not (repo / "data" / "uniprot" / "HSP70").exists() and not (repo / "results" / "ch_chaperones" / "inputs").exists() and not (fb / "sbatch.log").exists()
     finally: srv.shutdown()
+
+def test_options_roundtrip(server):
+    base, repo, fb = server
+    o = dict(dedup=True, twonn=True, pca=False, tsne=True, umap=False, all_layers=True)
+    code, r = post(base, "/api/options", o)
+    assert code == 200 and r == o and json.loads(get(base, "/api/options")[1]) == o
+    P = json.loads(get(base, "/api/params")[1])
+    assert P["dedup"]["enabled"] and P["summarize"]["embed2d"]["enabled"] and P["embed"]["layers"] == "all"

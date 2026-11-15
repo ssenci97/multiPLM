@@ -22,12 +22,13 @@ parser = argparse.ArgumentParser(description="t-SNE and UMAP of small point sets
 parser.add_argument("--manifest", type=str, default=None, help="JSON: tasks [{name, path}] of .npy arrays")
 parser.add_argument("--out", type=str, default=None, help="JSON results")
 parser.add_argument("--max_points", type=int, default=MAX_POINTS, help="Refuse sets of this many points or more (no subsampling)")
+parser.add_argument("--methods", type=str, default="tsne,umap", help="Comma list of tsne, umap")
 parser.add_argument("--perplexity", type=float, default=PERPLEXITY)
 parser.add_argument("--n_neighbors", type=int, default=N_NEIGHBORS)
 parser.add_argument("--yaml-in", nargs="?", const=YAML_PATH, default=None)
 parser.add_argument("--yaml-out", nargs="?", const=YAML_PATH, default=None)
 cli_preview, _ = parser.parse_known_args()
-params = dict(max_points=MAX_POINTS, perplexity=PERPLEXITY, n_neighbors=N_NEIGHBORS)
+params = dict(max_points=MAX_POINTS, methods="tsne,umap", perplexity=PERPLEXITY, n_neighbors=N_NEIGHBORS)
 if cli_preview.yaml_in and Path(cli_preview.yaml_in).exists():
     sec = (yaml.safe_load(Path(cli_preview.yaml_in).read_text()) or {}).get(SCRIPT_KEY) or {}
     params.update({k: sec[k] for k in sec if k in params})
@@ -59,12 +60,12 @@ def main() -> None:
     if not args.manifest or not args.out:
         if args.yaml_out: return
         parser.error("--manifest and --out are required")
-    m, out = json.loads(Path(args.manifest).read_text()), []
-    log(f"t-SNE and UMAP, scikit-learn {importlib.metadata.version('scikit-learn')}, umap-learn {importlib.metadata.version('umap-learn')}, seed {SEED}")
+    m, out, want = json.loads(Path(args.manifest).read_text()), [], set(args.methods.split(","))
+    log(f"{args.methods}, scikit-learn {importlib.metadata.version('scikit-learn')}, umap-learn {importlib.metadata.version('umap-learn')}, seed {SEED}")
     for t in m["tasks"]:
         X = np.asarray(np.load(t["path"]), dtype=np.float64)
         if len(X) >= args.max_points or len(X) < MIN_POINTS: out.append(dict(name=t["name"], points=len(X), skipped=f"n >= {args.max_points}" if len(X) >= args.max_points else f"n < {MIN_POINTS}")); continue
-        out.append(dict(name=t["name"], points=len(X), tsne=rounded(tsne(X, args.perplexity)), umap=rounded(umap_2d(X, args.n_neighbors))))
+        out.append(dict(name=t["name"], points=len(X), **({"tsne": rounded(tsne(X, args.perplexity))} if "tsne" in want else {}), **({"umap": rounded(umap_2d(X, args.n_neighbors))} if "umap" in want else {})))
     tmp = Path(f"{args.out}.tmp"); tmp.write_text(json.dumps(out)); tmp.replace(args.out)
     log(f"{len(out)} point set(s) -> {args.out}")
     log(f"{datetime.datetime.now():%Y-%m-%d %H:%M:%S} | elapsed {time.time() - t0:.1f} s | max RSS {resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1048576:.2f} GB")

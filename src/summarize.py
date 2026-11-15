@@ -28,7 +28,7 @@ TWONN = dict(enabled=False, max_points=10000, mu_fraction=0.9, n_min=20, metric=
 DADAPY_PYTHON = "/opt/envs/dadapy/bin/python"
 WRAPPER = Path(__file__).resolve().parent / "intrinsic_dim.py"
 PCA = dict(enabled=False, per_sample_cap=1000, hex_bins=30, per_sample_pca=False, max_components=50)
-EMBED2D = dict(enabled=False, max_points=1000)
+EMBED2D = dict(enabled=False, max_points=1000, tsne=True, umap=True)
 EMBED2D_WRAPPER = Path(__file__).resolve().parent / "embed2d.py"
 EMBED_COLS = ["sample_id", "backend", "proteins", "dim", "keys", "store_dtype", "compute_dtype", "truncated", "files", "revision", "input_sha256"]
 SAMPLE_COLS = ["sample_id", "records", "kept", "invalid", "source", "uniprot_release", "fasta_sha256"]
@@ -153,7 +153,7 @@ def embed2d_tasks(idx: dict[str, Path], k: str, tmp: Path, name: str) -> dict | 
 def run_embed2d(tasks: list[dict], tmp: Path) -> dict[str, dict]:
     """Run src/embed2d.py with the dadapy venv interpreter and return its results by task name."""
     (tmp / "e2d_manifest.json").write_text(json.dumps(dict(tasks=[dict(name=t["name"], path=t["path"]) for t in tasks])))
-    subprocess.run([dadapy_python(), str(EMBED2D_WRAPPER), "--manifest", str(tmp / "e2d_manifest.json"), "--out", str(tmp / "e2d_out.json"), "--max_points", str(int(args.embed2d["max_points"]))], check=True)
+    subprocess.run([dadapy_python(), str(EMBED2D_WRAPPER), "--manifest", str(tmp / "e2d_manifest.json"), "--out", str(tmp / "e2d_out.json"), "--max_points", str(int(args.embed2d["max_points"])), "--methods", ",".join(m for m in ("tsne", "umap") if args.embed2d.get(m, True))], check=True)
     return {r["name"]: r for r in json.loads((tmp / "e2d_out.json").read_text())}
 def norm_stats(b: str, idx: dict[str, Path], k: str, lens: dict[str, dict[str, int]]) -> tuple[dict, dict, dict]:
     """Norm and cosine statistics of one mean key; also returns centroids and row lengths."""

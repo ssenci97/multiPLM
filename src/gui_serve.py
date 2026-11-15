@@ -90,7 +90,7 @@ def examples() -> list[dict]:
         d = f"{EXAMPLES}/{n}"
         if not (os.path.exists(f"{d}/samples.tsv") and os.path.exists(f"{d}/param_configs.yaml")): continue
         m = read_yaml(f"{d}/meta.yaml")
-        out.append(dict(name=n, short=n.removeprefix("example_"), title=m.get("title", n), credit=m.get("credit", ""), backends=(read_yaml(f"{d}/param_configs.yaml").get("embed") or {}).get("backends", []), samples=[{k: v for k, v in r.items() if v} for r in tsv_rows(f"{d}/samples.tsv")]))
+        out.append(dict(name=n, short=n.removeprefix("example_"), title=m.get("title", n), credit=m.get("credit", ""), backends=(read_yaml(f"{d}/param_configs.yaml").get("embed") or {}).get("backends", []), options=options_of(read_yaml(f"{d}/param_configs.yaml")), samples=[{k: v for k, v in r.items() if v} for r in tsv_rows(f"{d}/samples.tsv")]))
     return out
 def backends() -> dict:
     """Backends of configs/tools.tsv with their default GPU ask, partition and weights state; the ones selected in param_configs.yaml."""
@@ -102,6 +102,21 @@ def backends() -> dict:
         out.append(dict(name=name, family=r["family"], env=r["env"], repo=r["repo"], revision=r["commit"], size_gb=r["size_gb"], licence=r["licence"], cpus=c, mem_mb=m, minutes=t,
                         partition=S["dgx_partition"] if name in S["dgx_backends"] else S["gpu_partition"], weights="ready" if got.get("revision") == r["commit"] and os.path.isfile(f"{ROOT}/data/models/{name}/CHECKSUMS") else "missing"))
     return dict(backends=out, selected=(P.get("embed") or {}).get("backends", []), why=pipeline.GPU_WHY, gpus_max=S["gpus_max"])
+def options_of(P: dict) -> dict:
+    """The analysis switches of a parameter file: dedup, TWO-NN, PCA, t-SNE, UMAP and whether every layer is stored."""
+    S, e2 = P.get("summarize") or {}, (P.get("summarize") or {}).get("embed2d") or {}
+    return dict(dedup=bool((P.get("dedup") or {}).get("enabled")), twonn=bool((S.get("twonn") or {}).get("enabled")), pca=bool((S.get("pca") or {}).get("enabled")),
+                tsne=bool(e2.get("enabled") and e2.get("tsne", True)), umap=bool(e2.get("enabled") and e2.get("umap", True)), all_layers=(P.get("embed") or {}).get("layers") == "all")
+def set_options(o: dict) -> dict:
+    """Store the analysis switches of the Samples tab in configs/param_configs.yaml (other settings stay)."""
+    P = read_yaml(PARAM_YAML); S = P.setdefault("summarize", {})
+    P.setdefault("dedup", {})["enabled"] = bool(o.get("dedup"))
+    S.setdefault("twonn", {})["enabled"] = bool(o.get("twonn"))
+    S.setdefault("pca", {})["enabled"] = bool(o.get("pca"))
+    e2 = S.setdefault("embed2d", {}); e2["tsne"], e2["umap"] = bool(o.get("tsne")), bool(o.get("umap")); e2["enabled"] = e2["tsne"] or e2["umap"]
+    P.setdefault("embed", {})["layers"] = "all" if o.get("all_layers") else [-1]
+    write_yaml(PARAM_YAML, P)
+    return options_of(P)
 def set_backends(names: list[str]) -> dict:
     """Store the backends ticked in the Run tab under embed.backends of configs/param_configs.yaml."""
     known = backends_mod.registry(f"{ROOT}/configs/tools.tsv")
@@ -384,7 +399,7 @@ class Handler(BaseHTTPRequestHandler):
         if path in STATIC:
             name, ctype = STATIC[path]; b = open(f"{GUI}/{name}", "rb").read()
             self.send_response(200); self.send_header("Content-Type", ctype); self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b); return
-        routes = {"/api/schema": lambda: json.load(open(SCHEMA)), "/api/samples": lambda: dict(samples=load_samples()), "/api/examples": lambda: dict(examples=examples()), "/api/backends": backends,
+        routes = {"/api/schema": lambda: json.load(open(SCHEMA)), "/api/samples": lambda: dict(samples=load_samples()), "/api/examples": lambda: dict(examples=examples()), "/api/backends": backends, "/api/options": lambda: options_of(read_yaml(PARAM_YAML)),
                   "/api/params": lambda: read_yaml(PARAM_YAML), "/api/path": lambda: path_info(self.query("p")), "/api/status": lambda: status(self.query("analysis")),
                   "/api/results": lambda: results(self.query("analysis")), "/api/perf": perf}
         self.send_json(200, routes[path]()) if path in routes else self.send_json(404, dict(error="not found"))
@@ -394,6 +409,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/samples":
             errs = analysis.validate(body.get("samples", []))
             return self.send_json(400, dict(errors=errs)) if errs else self.send_json(200, save(body["samples"]))
+        if self.path == "/api/options": return self.send_json(200, set_options(body))
         if self.path == "/api/backends":
             r = set_backends([str(x) for x in body.get("backends") or []])
             return self.send_json(400 if "errors" in r else 200, r)

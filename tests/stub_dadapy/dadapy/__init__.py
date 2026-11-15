@@ -2,7 +2,7 @@
 import numpy as np
 class Data:
     """Records its input; mimics the DADApy 0.3.4 TWO-NN signatures."""
-    def __init__(self, coordinates=None, maxk=None, verbose=False, n_jobs=None, rng_seed=42):
+    def __init__(self, coordinates=None, distances=None, maxk=None, period=None, verbose=False, n_jobs=8, working_memory=1024):
         self.X, self.N = np.asarray(coordinates), len(coordinates)
     def compute_id_2NN(self, mu_fraction=0.9):
         return float(np.linalg.norm(self.X, axis=1).mean()), 0.0, 0.5

@@ -90,7 +90,7 @@ results/<analysis>/
 | Atomic writes | `.tmp` (or a hidden `.name.tmp`) then rename, everywhere; a killed shard resumes from its last complete chunk |
 | Frozen inputs | editing a frozen file, `configs/tools.tsv` or a local FASTA refuses the launch: create a new analysis |
 | Tags | `[SLURM-INFO]`, `[PYTHON-INFO]`, `[BASH-INFO]` |
-| Seed | `SEED=42` everywhere (subsamples, pairs, PCA, DADApy `rng_seed`) |
+| Seed | `SEED=42` everywhere (subsamples, pairs, PCA; TWO-NN itself is deterministic) |
 | Never | Snakemake or other engines, job arrays, a console inside the container, tokens in logs, raw vectors in the browser |
 
 ## 6. Install

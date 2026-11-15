@@ -34,7 +34,7 @@ def prepare(X: np.ndarray, max_points: int, metric: str, rng: np.random.Generato
     return U, len(X) - len(U)
 def estimate(X: np.ndarray, mu_fraction: float, n_min: int) -> dict:
     """compute_id_2NN on all points and return_id_scaling_2NN for the scale curve."""
-    data = Data(coordinates=X, maxk=3, verbose=False, n_jobs=1, rng_seed=SEED)
+    data = Data(coordinates=X, maxk=3, verbose=False, n_jobs=1)
     d, _, scale = data.compute_id_2NN(mu_fraction=mu_fraction)
     ids, errs, rs = data.return_id_scaling_2NN(n_min=n_min, mu_fraction=mu_fraction)
     sizes = [int(n) for n in np.round(len(X) / 2.0 ** np.arange(len(ids)))]

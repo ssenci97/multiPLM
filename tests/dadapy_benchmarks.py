@@ -11,7 +11,7 @@ MU_FRACTIONS = (0.8, 0.85, 0.9, 0.95)
 ###################################### HELPER_FUNCTIONS
 def two_nn(X: np.ndarray, mu_fraction: float = 0.9, period: np.ndarray = None) -> float:
     """TWO-NN estimate of DADApy on all points."""
-    return float(Data(coordinates=X, maxk=3, period=period, verbose=False, n_jobs=1, rng_seed=SEED).compute_id_2NN(mu_fraction=mu_fraction)[0])
+    return float(Data(coordinates=X, maxk=3, period=period, verbose=False, n_jobs=1).compute_id_2NN(mu_fraction=mu_fraction)[0])
 def check(name: str, value: float, lo: float, hi: float) -> bool:
     """Print and test one benchmark."""
     ok = lo <= value <= hi

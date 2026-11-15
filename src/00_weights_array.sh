@@ -9,7 +9,6 @@
 #SBATCH -o weights_%A_%a.log
 ###################################### dependencies
 set -euo pipefail
-command -v singularity >/dev/null || module load singularity
 ###################################### parameters
 backends=(esm2_t6_8M esm2_t12_35M esm2_t30_150M esm2_t33_650M esm2_t36_3B esmc_300m esmc_600m esm3_sm_open_v1 prott5_xl_half prostt5)
 MP_ROOT="$(cd "${MP_ROOT:-${SLURM_SUBMIT_DIR:-$PWD}}" && pwd -P)"
@@ -20,7 +19,11 @@ log() { echo "[SLURM-INFO] $*"; }
 peak() { local rel f; rel=$(awk -F: '$1=="0"{print $3}' /proc/self/cgroup 2>/dev/null || true); for f in "/sys/fs/cgroup$rel/memory.peak" /sys/fs/cgroup/memory.peak; do [ -r "$f" ] && { awk '{printf "%.2f GB", $1/1073741824}' "$f"; return; }; done; echo "NA (see sacct)"; }
 ###################################### weights
 cd "$MP_ROOT"
+app="${MP_APPTAINER:-$(command -v singularity || command -v apptainer || true)}"
+[ -n "$app" ] || app="$(bash -lc 'module load singularity >/dev/null 2>&1; command -v singularity || command -v apptainer' 2>/dev/null || true)"
+[ -n "$app" ] || [ ! -x /opt/programs/singularity/4.3.1/bin/singularity ] || app=/opt/programs/singularity/4.3.1/bin/singularity
+[ -n "$app" ] || { log "no singularity/apptainer found on $(hostname): set MP_APPTAINER=/path/to/singularity before sbatch"; exit 1; }
 [ -s "$sif" ] || { log "$sif missing: run containers/build.sh pull first"; exit 1; }
-log "host $(hostname) | job ${SLURM_JOB_ID:-local}_${SLURM_ARRAY_TASK_ID} | backend $b"
-singularity exec --cleanenv --bind "$MP_ROOT" --pwd "$MP_ROOT" "$sif" /opt/conda/envs/mp/bin/python src/weights.py --backend "$b" --models_dir data/models --checksums_dir configs/checksums
+log "host $(hostname) | job ${SLURM_JOB_ID:-local}_${SLURM_ARRAY_TASK_ID} | backend $b | $app"
+"$app" exec --cleanenv --bind "$MP_ROOT" --pwd "$MP_ROOT" "$sif" /opt/conda/envs/mp/bin/python src/weights.py --backend "$b" --models_dir data/models --checksums_dir configs/checksums
 log "$(date '+%F %T') | elapsed $(date -u -d @$((SECONDS-T0)) +%H:%M:%S) | max RSS $(peak)"

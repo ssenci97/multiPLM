@@ -123,3 +123,6 @@ details[open] > summary::before { transform: rotate(90deg); }
 .backend { transition: box-shadow .15s, background .15s; }
 .backend:has(input:checked) { background: var(--fill); box-shadow: inset 0 0 0 2px var(--blue); border-color: transparent; }
 .backend .switch { flex-wrap: wrap; row-gap: 4px; }
+.by-model { border-top: 1px solid var(--hair); margin-top: 14px; padding-top: 4px; }
+.by-model:first-child { border-top: 0; margin-top: 0; }
+.field[hidden] { display: none; }

@@ -135,7 +135,7 @@ function heat(title, m) {
   const labels = m.samples.map((s, i) => `<text x="154" y="${24 + i * c + c / 2 + 4}" font-size="12.5" text-anchor="end" fill="currentColor">${esc(s)}</text><text x="${160 + i * c + c / 2}" y="16" font-size="12.5" text-anchor="middle" fill="currentColor"><title>${esc(s)}</title>${esc(s.length > 8 ? s.slice(0, 7) + "…" : s)}</text>`).join("");
   return `<h4>${esc(title)}</h4><p class="muted small">Each cell prints its cosine; darker = more similar.</p><svg viewBox="0 0 ${W} ${30 + n * c}" role="img" aria-label="${esc(title)}" style="width:100%;max-width:${W}px">${labels}${cells}</svg>`;
 }
-function shape(k, x, y, col) { const r = 3.5; return [`<circle cx="${x}" cy="${y}" r="${r}" fill="${col}"/>`, `<rect x="${x - r}" y="${y - r}" width="${2 * r}" height="${2 * r}" fill="${col}"/>`, `<path d="M${x} ${y - r}L${x + r} ${y + r}L${x - r} ${y + r}Z" fill="${col}"/>`, `<path d="M${x} ${y - r}L${x + r} ${y}L${x} ${y + r}L${x - r} ${y}Z" fill="${col}"/>`, `<path d="M${x - r} ${y}H${x + r}M${x} ${y - r}V${y + r}" stroke="${col}" stroke-width="2"/>`, `<circle cx="${x}" cy="${y}" r="${r}" fill="none" stroke="${col}" stroke-width="2"/>`, `<circle cx="${x}" cy="${y}" r="${r + 1}" fill="none" stroke="${col}" stroke-width="1"/>`][k % 7]; }
+function shape(k, x, y, col, r = 3.5) { return [`<circle cx="${x}" cy="${y}" r="${r}" fill="${col}"/>`, `<rect x="${x - r}" y="${y - r}" width="${2 * r}" height="${2 * r}" fill="${col}"/>`, `<path d="M${x} ${y - r}L${x + r} ${y + r}L${x - r} ${y + r}Z" fill="${col}"/>`, `<path d="M${x} ${y - r}L${x + r} ${y}L${x} ${y + r}L${x - r} ${y}Z" fill="${col}"/>`, `<path d="M${x - r} ${y}H${x + r}M${x} ${y - r}V${y + r}" stroke="${col}" stroke-width="2"/>`, `<circle cx="${x}" cy="${y}" r="${r}" fill="none" stroke="${col}" stroke-width="2"/>`, `<circle cx="${x}" cy="${y}" r="${r + 1}" fill="none" stroke="${col}" stroke-width="1"/>`][k % 7]; }
 function lines(title, xs, series, opts = {}) {
   const names = Object.keys(series), W = 640, H = 240, L = 44, B = 34, logx = !!opts.logx;
   const fx = v => logx ? Math.log10(v) : v, xmin = Math.min(...xs.map(fx)), xmax = Math.max(...xs.map(fx)), ys = names.flatMap(n => series[n].filter(v => v !== null && v !== undefined));
@@ -147,27 +147,31 @@ function lines(title, xs, series, opts = {}) {
   const yt = [ymin, (ymin + ymax) / 2, ymax].map(v => `<text x="${L - 4}" y="${Y(v) + 4}" font-size="12.5" text-anchor="end" fill="currentColor">${v.toFixed(1)}</text>`).join("");
   return `<h4>${esc(title)}</h4><div class="legend">${names.map((n, i) => `<span><svg width="14" height="14" aria-hidden="true">${shape(i, 7, 7, fill(i))}</svg>${esc(n)}</span>`).join("")}</div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}" style="width:100%;max-width:${W}px"><line x1="${L}" y1="${H - B}" x2="${W}" y2="${H - B}" stroke="currentColor"/><line x1="${L}" y1="10" x2="${L}" y2="${H - B}" stroke="currentColor"/>${yt}${ticks}<text x="${W / 2}" y="${H - 2}" font-size="12.5" text-anchor="middle" fill="currentColor">${esc(opts.xlabel || "")}</text>${body}</svg>`;
 }
-function twonnCharts(A, b, key) {
-  const T = (A.twonn || {}).rows || [], box = $("#twonn");
+function crossDepth(T) {
+  const bs = [...new Set(T.filter(r => r.pooling === "mean" && r.sample === "all samples").map(r => r.backend))];
+  if (bs.length < 2) return "";
+  const depth = [0.25, 0.5, 0.75, 1]; return lines("All samples: d at relative depth (nearest layer), per backend", depth, Object.fromEntries(bs.map(x => { const rs = T.filter(r => r.backend === x && r.pooling === "mean" && r.sample === "all samples"), n = Math.max(...rs.map(r => r.layer)); return [x, depth.map(f => { const t = Math.max(1, Math.round(f * n)); const hit = rs.reduce((p, r) => Math.abs(r.layer - t) < Math.abs(p.layer - t) ? r : p, rs[0]); return hit ? hit.d : null; })]; })), { xlabel: "layer / number of layers", ylabel: "d" });
+}
+function twonnCharts(A, b, key, out, cross = true) {
+  const T = (A.twonn || {}).rows || [], box = out || $("#twonn");
   if (!T.length) { box.innerHTML = '<p class="muted">not computed (summarize.twonn.enabled is off, or fewer than 20 points per sample)</p>'; return; }
   const mine = T.filter(r => r.backend === b && r.pooling === "mean"), groups = [...new Set(T.map(r => r.sample))];
   const layers = [...new Set(mine.map(r => r.layer))].sort((x, y) => x - y);
   let html = layers.length > 1 ? lines(`${b}: intrinsic dimension by layer (mean vectors)`, layers, Object.fromEntries(groups.map(g => [g, layers.map(l => (mine.find(r => r.layer === l && r.sample === g) || {}).d ?? null)])), { xlabel: "layer", ylabel: "d", err: Object.fromEntries(groups.map(g => [g, layers.map(l => (mine.find(r => r.layer === l && r.sample === g) || {}).error)])) }) : "";
-  const bs = [...new Set(T.filter(r => r.pooling === "mean" && r.sample === "all samples").map(r => r.backend))];
-  if (bs.length > 1) { const depth = [0.25, 0.5, 0.75, 1]; html += lines("All samples: d at relative depth (nearest layer), per backend", depth, Object.fromEntries(bs.map(x => { const rs = T.filter(r => r.backend === x && r.pooling === "mean" && r.sample === "all samples"), n = Math.max(...rs.map(r => r.layer)); return [x, depth.map(f => { const t = Math.max(1, Math.round(f * n)); const hit = rs.reduce((p, r) => Math.abs(r.layer - t) < Math.abs(p.layer - t) ? r : p, rs[0]); return hit ? hit.d : null; })]; })), { xlabel: "layer / number of layers", ylabel: "d" }); }
+  html += cross ? crossDepth(T) : "";
   const at = T.filter(r => r.backend === b && r.key === key);
   if (at.length) { const Ns = [...new Set(at.flatMap(r => r.decimation.map(l => l.points)))].sort((x, y) => x - y); html += lines(`${b} ${key}: d(N) by number of points (random subsets, mean ± standard error)`, Ns, Object.fromEntries(at.map(r => [r.sample, Ns.map(N => (r.decimation.find(l => l.points === N) || {}).d ?? null)])), { logx: true, xlabel: "N points (log scale)", ylabel: "d", err: Object.fromEntries(at.map(r => [r.sample, Ns.map(N => (r.decimation.find(l => l.points === N) || {}).spread)])) });
     html += `<div class="scroll"><table><tr><th>sample</th><th>points</th><th>d</th><th>± SE (N/2)</th><th>duplicates dropped</th><th>note</th></tr>${at.map(r => `<tr><td>${esc(r.sample)}</td><td>${r.points}</td><td>${r.d ?? "—"}</td><td>${r.error ?? "—"}</td><td>${r.dropped}${r.dropped_warning ? " ▲ above 10%: unreliable" : ""}</td><td>${r.stratified_tokens ? "residues as points, stratified by protein" : "one mean vector per protein"}</td></tr>`).join("")}</table></div>`; }
   box.innerHTML = html || '<p class="muted">no TWO-NN estimate for this backend</p>';
 }
 function scatter(title, series, W = 360, H = 300) {
-  const names = Object.keys(series), all = names.flatMap(n => series[n]), xs = all.map(p => p[0]), ys = all.map(p => p[1]), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const names = Object.keys(series), all = names.flatMap(n => series[n]), xs = all.map(p => p[0]), ys = all.map(p => p[1]), q = (a, f) => [...a].sort((u, v) => u - v)[Math.min(a.length - 1, Math.max(0, Math.round(f * (a.length - 1))))], x0 = q(xs, .005), x1 = q(xs, .995), y0 = q(ys, .005), y1 = q(ys, .995), cl = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   const X = v => 10 + (W - 20) * (v - x0) / ((x1 - x0) || 1), Y = v => H - 10 - (H - 20) * (v - y0) / ((y1 - y0) || 1);
-  const dots = names.map((n, i) => series[n].map(p => `<g><title>${esc(n)}</title>${shape(i, X(p[0]).toFixed(1), Y(p[1]).toFixed(1), fill(i))}</g>`).join("")).join("");
+  const order = names.map((n, i) => i).sort((a, b) => series[names[b]].length - series[names[a]].length), dots = order.map(i => `<g opacity=".7">${series[names[i]].map(p => `<g><title>${esc(names[i])}</title>${shape(i, Math.round(cl(X(p[0]), 4, W - 4) * 10) / 10, Math.round(cl(Y(p[1]), 4, H - 4) * 10) / 10, fill(i), 2.6)}</g>`).join("")}</g>`).join("");
   return `<figure class="panel"><figcaption>${esc(title)}</figcaption><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}" style="width:${W}px;max-width:100%;border:1px solid var(--hair)">${dots}</svg></figure>`;
 }
-function embed2dCharts(A, b, key, P) {
-  const box = $("#embed2d"), E = ((A.embed2d || {})[b] || {})[key], by = (pts, labels) => { const o = {}; pts.forEach((p, i) => (o[labels[i]] = o[labels[i]] || []).push(p)); return o; };
+function embed2dCharts(A, b, key, P, out) {
+  const box = out || $("#embed2d"), E = ((A.embed2d || {})[b] || {})[key], by = (pts, labels) => { const o = {}; pts.forEach((p, i) => (o[labels[i]] = o[labels[i]] || []).push(p)); return o; };
   const pca = P && P.points ? scatter("PCA", P.points) : "";
   if (!E && !pca) { box.innerHTML = '<p class="muted">no 2D embedding for this representation (summarize.embed2d.enabled is off, or it is computed for the last layer only)</p>'; return; }
   if (E && E.skipped) { box.innerHTML = pca + `<p class="muted">t-SNE and UMAP skipped (${esc(E.skipped)}): they are only drawn when every point can be shown, without subsampling.</p>`; return; }
@@ -180,8 +184,8 @@ function hexPanel(name, P, cells, max, W = 230) {
   const hx = cells.map(([c, rw, l, k]) => { const cx = (c + 0.5 * l) * sx * kx, cy = H - (rw + 0.5 * l) * sy * ky; return `<polygon points="${hexPath(cx, cy)}" fill="${shade(k)}"><title>${esc(name)}: ${k} vector(s)</title></polygon>`; }).join("");
   return `<figure class="panel"><figcaption>${esc(name)}</figcaption><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="PCA density of ${esc(name)}" style="width:${W}px;max-width:100%;border:1px solid var(--hair)">${hx}</svg></figure>`;
 }
-function pcaCharts(A, b, key) {
-  const box = $("#pca"), P = ((A.pca || {})[b] || {})[key];
+function pcaCharts(A, b, key, out) {
+  const box = out || $("#pca"), P = ((A.pca || {})[b] || {})[key];
   if (!P) { box.innerHTML = '<p class="muted">not computed for this representation (summarize.pca.enabled is off)</p>'; return ""; }
   const max = Math.max(1, ...Object.values(P.hex).flatMap(cs => cs.map(c => c[3])));
   let html = `<p class="muted small">Shared axes and shared density scale (lightest = 1, darkest = ${max} vectors per hexagon; hover for counts). Fit on ${Object.entries(P.fit_points).map(([s, n]) => `${n} ${esc(s)}`).join(", ")}; clipped to the 0.5–99.5% range: ${Object.entries(P.clipped).map(([s, n]) => `${esc(s)} ${n}`).join(", ")}.</p><div class="panels">${P.samples.map(s => hexPanel(s, P, P.hex[s], max)).join("")}</div>`;
@@ -202,7 +206,19 @@ function charts(r) {
   const cur = sel.value; sel.innerHTML = bnames.map(b => `<option ${b === cur ? "selected" : ""}>${esc(b)}</option>`).join(""); sel.onchange = () => charts(r);
   const lsel = $("#agg-layer"), lcur = lsel.value, keys = [...new Set([...Object.keys((A.pca || {})[sel.value] || {}), ...((A.twonn || {}).rows || []).filter(x => x.backend === sel.value).map(x => x.key)])].sort((x, y) => parseInt(x.split("_")[1]) - parseInt(y.split("_")[1]));
   lsel.innerHTML = keys.map(k => `<option ${k === lcur ? "selected" : ""}>${esc(k)}</option>`).join(""); if (!keys.includes(lcur) && keys.length) lsel.value = keys[keys.length - 1]; lsel.onchange = () => charts(r);
-  twonnCharts(A, sel.value, lsel.value); const pcaMore = pcaCharts(A, sel.value, lsel.value); embed2dCharts(A, sel.value, lsel.value, ((A.pca || {})[sel.value] || {})[lsel.value]);
+  const view = store.get("view", "model"), tsel = $("#agg-type"); tsel.value = store.get("vtype", "twonn");
+  document.querySelectorAll("#view-mode button").forEach(x => { x.classList.toggle("on", x.dataset.view === view); x.onclick = () => { store.set("view", x.dataset.view); charts(r); }; });
+  tsel.onchange = () => { store.set("vtype", tsel.value); charts(r); };
+  $("#field-type").hidden = view !== "type"; $("#field-backend").hidden = $("#field-layer").hidden = view === "type";
+  const last = b => { const ks = [...Object.keys((A.pca || {})[b] || {}), ...Object.keys((A.embed2d || {})[b] || {}), ...((A.twonn || {}).rows || []).filter(x => x.backend === b && x.pooling === "mean").map(x => x.key)].filter(k => k.endsWith("/mean")); return ks.sort((x, y) => parseInt(x.split("_")[1]) - parseInt(y.split("_")[1])).pop(); };
+  const blocks = fn => bnames.map(b => { const d = document.createElement("div"); d.className = "by-model"; d.innerHTML = `<h4>${esc(b)} <span class="muted small">${esc(last(b) || "")}</span></h4><div></div>`; fn(b, last(b), d.lastChild); return d; });
+  ["twonn", "pca", "embed2d"].forEach(t => { $("#card-" + t).hidden = view === "type" && tsel.value !== t; });
+  let pcaMore = "";
+  if (view === "type") {
+    const t = tsel.value, tgt = $("#" + t), L = blocks((b, k, o) => { if (t === "twonn") twonnCharts(A, b, k, o, false); else if (t === "pca") pcaCharts(A, b, k, o); else embed2dCharts(A, b, k, ((A.pca || {})[b] || {})[k], o); });
+    tgt.innerHTML = t === "twonn" ? crossDepth((A.twonn || {}).rows || []) : "";
+    L.forEach(d => tgt.append(d));
+  } else { twonnCharts(A, sel.value, lsel.value); pcaMore = pcaCharts(A, sel.value, lsel.value); embed2dCharts(A, sel.value, lsel.value, ((A.pca || {})[sel.value] || {})[lsel.value]); }
   const qc = bars("Protein length (kept records)", bins, Object.fromEntries(samples.map(s => [s, A.samples[s].length_hist])), v => `${v} proteins`);
   let html = "";
   if (samples.some(s => A.samples[s].dedup)) html += `<h4>MMseqs2 deduplication</h4><table><tr><th>sample</th><th>proteins</th><th>representatives</th><th>represented by another sample</th><th>settings</th></tr>${samples.map(s => { const d = A.samples[s].dedup; return d ? `<tr><td>${esc(s)}</td><td>${d.proteins}</td><td>${d.representatives}</td><td>${d.represented_in_other_samples}</td><td>${esc(d.mode)} id ${d.min_seq_id} cov ${d.coverage} (${esc(d.scope)}, mmseqs ${esc(d.mmseqs_version)})</td></tr>` : ""; }).join("")}</table>`;

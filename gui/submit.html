@@ -81,17 +81,19 @@
   </section>
   <section id="tab-results" role="tabpanel" aria-label="Results" hidden>
     <div class="card row"><div class="field"><label for="res-pick">Analysis</label><select id="res-pick"><option value="">—</option></select></div></div>
-    <div class="card row"><div class="field"><label>View results</label><div id="view-mode" class="seg small" role="group" aria-label="View by"><button type="button" data-view="model">By model</button><button type="button" data-view="type">By plot type</button></div></div>
-      <div class="field" id="field-backend"><label for="agg-backend">Model</label><select id="agg-backend" class="inline"></select></div><div class="field" id="field-layer"><label for="agg-layer">Representation (layer / pooling)</label><select id="agg-layer" class="inline"></select></div>
-      <div class="field" id="field-type" hidden><label for="agg-type">Plot type (every model, final layer)</label><select id="agg-type" class="inline"><option value="twonn">Intrinsic dimension</option><option value="pca">PCA</option><option value="embed2d">PCA / t-SNE / UMAP scatter</option></select></div></div>
-    <div class="card" id="card-twonn"><h3>Intrinsic dimension (TWO-NN)</h3><p class="muted small">Computed with DADApy (Glielmo et al. 2022, doi:10.1016/j.patter.2022.100589), method of Facco, d'Errico, Rodriguez, Laio (2017) Sci Rep 7:12140, doi:10.1038/s41598-017-11873-y. Read d(N) as a curve: a plateau over N is the relevant dimension; very small N falls toward 1, noise inflates d at large N.</p><div id="twonn"></div></div>
-    <div class="card" id="card-pca"><h3>PCA (joint fit, hexbin densities)</h3><p class="muted small">Fit on a balanced subsample, every vector projected; densities only. Off by default (summarize.pca.enabled).</p><div id="pca"></div></div>
-    <div class="card" id="card-embed2d"><h3>Projections: PCA, t-SNE, UMAP (fewer than 1000 points, no subsampling)</h3><p class="muted small">Last layer of each model, same proteins in every model. Switch layouts with the buttons; the agreement section compares models protein by protein.</p><div id="embed2d"></div></div>
-    <div class="card"><h3>Records per sample</h3><div id="records-legend" class="legend"></div><div id="records"></div><div id="charts"></div></div>
-    <details class="card"><summary>More diagnostics (norms, cosines, PC1 vs length, confusion, deduplication, status)</summary><div id="more"></div></details>
-    <details class="card"><summary>Embeddings (sample × backend)</summary><p class="muted small">✓ = merged file present (proteins × dimensions, stored keys); ○ = not produced yet.</p><div id="matrix"></div></details>
-    <div class="card"><h3>Weights used</h3><div id="weights"></div></div>
-    <details class="card"><summary>Per-sample provenance (JSON)</summary><pre id="meta" class="log"></pre></details>
+    <div class="card controls" id="controls">
+      <div class="field"><label for="plot-type">Plot type (shown for every model)</label><select id="plot-type" class="inline"></select></div>
+      <div class="field"><label for="agg-layer">Representation (layer / pooling)</label><select id="agg-layer" class="inline"></select></div>
+      <div class="field grow"><label id="model-pick-l">Models</label><div id="model-pick" class="pick" role="group" aria-labelledby="model-pick-l"></div></div>
+    </div>
+    <div class="card" id="card-compare"><div class="card-head"><h3 id="compare-title">Comparison</h3><span class="muted small" id="compare-key"></span></div><p id="compare-note" class="muted small"></p><div id="compare"></div></div>
+    <details class="card report"><summary>Report: records, deduplication, status, embeddings, weights, provenance</summary>
+      <h4>Records per sample</h4><div id="records-legend" class="legend"></div><div id="records"></div><div id="charts"></div>
+      <div id="more"></div>
+      <h4>Embeddings (sample × backend)</h4><p class="muted small">✓ = merged file present (proteins × dimensions, stored keys); ○ = not produced yet.</p><div id="matrix"></div>
+      <h4>Weights used</h4><div id="weights"></div>
+      <h4>Per-sample provenance (JSON)</h4><pre id="meta" class="log"></pre>
+    </details>
   </section>
 </main>
 <main id="perf" class="perf" hidden aria-label="Performance">

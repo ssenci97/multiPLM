@@ -155,6 +155,15 @@ def run_embed2d(tasks: list[dict], tmp: Path) -> dict[str, dict]:
     (tmp / "e2d_manifest.json").write_text(json.dumps(dict(tasks=[dict(name=t["name"], path=t["path"]) for t in tasks])))
     subprocess.run([dadapy_python(), str(EMBED2D_WRAPPER), "--manifest", str(tmp / "e2d_manifest.json"), "--out", str(tmp / "e2d_out.json"), "--max_points", str(int(args.embed2d["max_points"])), "--methods", ",".join(m for m in ("tsne", "umap") if args.embed2d.get(m, True))], check=True)
     return {r["name"]: r for r in json.loads((tmp / "e2d_out.json").read_text())}
+def agreement(tasks: list[dict], k: int = 10) -> dict | None:
+    """Agreement of the same proteins across backends on the full vectors: Pearson correlation of the pairwise cosine distances (RSA) and mean overlap of the k nearest neighbours; None unless two backends share the same proteins."""
+    ts = [t for t in tasks if t["labels"] == tasks[0]["labels"]]
+    if len(ts) < 2: return None
+    D, N = [], []
+    for t in ts:
+        X = unit(np.load(t["path"]).astype(np.float64)); d = 1 - X @ X.T; iu = np.triu_indices(len(X), 1); D.append(d[iu]); np.fill_diagonal(d, np.inf); N.append(np.argsort(d, axis=1)[:, :k])
+    n = len(ts); rsa = np.corrcoef(np.stack(D)); kn = np.array([[np.mean([len(set(a) & set(b)) / k for a, b in zip(N[i], N[j])]) for j in range(n)] for i in range(n)])
+    return dict(backends=[t["backend"] for t in ts], key=ts[0]["key"], proteins=len(N[0]), k=k, rsa=rsa.round(4).tolist(), knn=kn.round(4).tolist())
 def norm_stats(b: str, idx: dict[str, Path], k: str, lens: dict[str, dict[str, int]]) -> tuple[dict, dict, dict]:
     """Norm and cosine statistics of one mean key; also returns centroids and row lengths."""
     norms, cent, row_len = {}, {}, {}
@@ -225,6 +234,7 @@ def main() -> None:
     if e2d:
         res = run_embed2d(e2d, tmp)
         for t in e2d: agg["embed2d"].setdefault(t["backend"], {})[t["key"]] = dict({k: v for k, v in res[t["name"]].items() if k != "name"}, labels=t["labels"], samples=list(dict.fromkeys(t["labels"])))
+    if len(e2d) > 1: agg["embed2d_agreement"] = agreement(e2d)
     if tasks: ids_rows = agg["twonn"]["rows"] = run_dadapy(tasks, tmp)
     shutil.rmtree(tmp)
     for t in agg["throughput"].values(): t["proteins_per_gpu_hour"] = round(t["proteins"] / (t["gpu_s"] / 3600), 1) if t["gpu_s"] else None

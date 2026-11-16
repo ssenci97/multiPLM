@@ -8,7 +8,7 @@ const badge = s => `<span class="badge ${esc(s)}">${esc(STATES[s] || s)}</span>`
 let saved = [], schema = null, examples = [], timer = null, perfTimer = null;
 
 function setTab(t) {
-  document.querySelectorAll(".seg button").forEach(b => { const on = b.dataset.tab === t; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
+  document.querySelectorAll(".seg button[data-tab]").forEach(b => { const on = b.dataset.tab === t; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
   ["samples", "run", "results"].forEach(n => { $("#tab-" + n).hidden = n !== t; });
   store.set("tab", t);
   if (t === "run") refreshRun(); if (t === "results") refreshResults();
@@ -168,14 +168,45 @@ function scatter(title, series, W = 360, H = 300) {
   const names = Object.keys(series), all = names.flatMap(n => series[n]), xs = all.map(p => p[0]), ys = all.map(p => p[1]), q = (a, f) => [...a].sort((u, v) => u - v)[Math.min(a.length - 1, Math.max(0, Math.round(f * (a.length - 1))))], x0 = q(xs, .005), x1 = q(xs, .995), y0 = q(ys, .005), y1 = q(ys, .995), cl = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   const X = v => 10 + (W - 20) * (v - x0) / ((x1 - x0) || 1), Y = v => H - 10 - (H - 20) * (v - y0) / ((y1 - y0) || 1);
   const order = names.map((n, i) => i).sort((a, b) => series[names[b]].length - series[names[a]].length), dots = order.map(i => `<g opacity=".7">${series[names[i]].map(p => `<g><title>${esc(names[i])}</title>${shape(i, Math.round(cl(X(p[0]), 4, W - 4) * 10) / 10, Math.round(cl(Y(p[1]), 4, H - 4) * 10) / 10, fill(i), 2.6)}</g>`).join("")}</g>`).join("");
-  return `<figure class="panel"><figcaption>${esc(title)}</figcaption><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}" style="width:${W}px;max-width:100%;border:1px solid var(--hair)">${dots}</svg></figure>`;
+  return `<figure class="panel"><figcaption>${esc(title)}</figcaption><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}" style="width:100%;max-width:${W}px;border:1px solid var(--hair)">${dots}</svg></figure>`;
 }
-function embed2dCharts(A, b, key, P, out) {
-  const box = out || $("#embed2d"), E = ((A.embed2d || {})[b] || {})[key], by = (pts, labels) => { const o = {}; pts.forEach((p, i) => (o[labels[i]] = o[labels[i]] || []).push(p)); return o; };
-  const pca = P && P.points ? scatter("PCA", P.points) : "";
-  if (!E && !pca) { box.innerHTML = '<p class="muted">no 2D embedding for this representation (summarize.embed2d.enabled is off, or it is computed for the last layer only)</p>'; return; }
-  if (E && E.skipped) { box.innerHTML = pca + `<p class="muted">t-SNE and UMAP skipped (${esc(E.skipped)}): they are only drawn when every point can be shown, without subsampling.</p>`; return; }
-  box.innerHTML = `${legend(E ? E.samples : Object.keys(P.points))}<div class="panels">${pca}${E ? (E.tsne ? scatter("t-SNE", by(E.tsne, E.labels)) : "") + (E.umap ? scatter("UMAP", by(E.umap, E.labels)) : "") : ""}</div><p class="muted small">All ${E ? E.points : ""} points shown, no subsampling. Distances between far-apart clusters are not meaningful in t-SNE or UMAP; use them to see grouping, not to measure.</p>`;
+const METHODS = [["pca", "PCA"], ["tsne", "t-SNE"], ["umap", "UMAP"]];
+function projData(A, b, m) {
+  const k = Object.keys((A.embed2d || {})[b] || {}).concat(Object.keys((A.pca || {})[b] || {})).filter(x => x.endsWith("/mean")).sort((x, y) => parseInt(x.split("_")[1]) - parseInt(y.split("_")[1])).pop();
+  const E = ((A.embed2d || {})[b] || {})[k], P = ((A.pca || {})[b] || {})[k];
+  if (m === "pca") return P && P.points ? P.points : null;
+  if (!E || !E[m]) return null;
+  const o = {}; E[m].forEach((p, i) => (o[E.labels[i]] = o[E.labels[i]] || []).push(p)); return o;
+}
+function pearson(a, b) { const n = a.length, ma = a.reduce((x, y) => x + y, 0) / n, mb = b.reduce((x, y) => x + y, 0) / n; let sab = 0, saa = 0, sbb = 0; for (let i = 0; i < n; i++) { sab += (a[i] - ma) * (b[i] - mb); saa += (a[i] - ma) ** 2; sbb += (b[i] - mb) ** 2; } return sab / Math.sqrt(saa * sbb || 1); }
+function agreementHtml(A) {
+  const G = A.embed2d_agreement; if (!G) return "";
+  const names = G.backends, pts = b => { const P = ((A.pca || {})[b] || {})[G.key]; return P && P.points; }, sel = store.get("pair", [names[0], names[1]]);
+  const [x, y] = sel.every(n => names.includes(n)) && sel[0] !== sel[1] ? sel : [names[0], names[1]];
+  let pair = "";
+  if (pts(x) && pts(y)) {
+    const pc = c => { const o = {}; let ax = [], ay = []; Object.keys(pts(x)).forEach(sm => { o[sm] = pts(x)[sm].map((p, i) => [p[c], pts(y)[sm][i][c]]); pts(x)[sm].forEach((p, i) => { ax.push(p[c]); ay.push(pts(y)[sm][i][c]); }); }); return [o, Math.abs(pearson(ax, ay))]; };
+    const [o1, r1] = pc(0), [o2, r2] = pc(1);
+    pair = `<div class="grid-row" style="--n:2">${scatter(`PC1: ${x} vs ${y} (|r| = ${r1.toFixed(2)})`, o1)}${scatter(`PC2: ${x} vs ${y} (|r| = ${r2.toFixed(2)})`, o2)}</div><p class="muted small">Each dot is one protein: its PCA coordinate in ${esc(x)} (horizontal) against ${esc(y)} (vertical); the sign of a component is arbitrary, so |r| is shown.</p>`;
+  } else pair = '<p class="muted">Per-protein PCA scatter needs PCA on (and fewer than 1000 points).</p>';
+  const opt = v => names.map(n => `<option ${n === v ? "selected" : ""}>${esc(n)}</option>`).join("");
+  return `<h4>Agreement between models (${G.proteins} proteins, ${esc(G.key)})</h4><div class="grid-row" style="--n:2">${heat("Distance correlation (RSA): pairwise cosine distances of the same proteins", { samples: names, matrix: G.rsa })}${heat(`Neighbour overlap: share of the ${G.k} nearest neighbours in common`, { samples: names, matrix: G.knn })}</div>
+    <div class="row"><div class="field"><label for="ag-a">Model A</label><select id="ag-a" class="inline">${opt(x)}</select></div><div class="field"><label for="ag-b">Model B</label><select id="ag-b" class="inline">${opt(y)}</select></div></div>${pair}`;
+}
+function projections(A) {
+  const box = $("#embed2d"), bs = Object.keys(A.backends || {}).concat(Object.keys(A.embed2d || {}), Object.keys(A.pca || {})).filter((b, i, a) => a.indexOf(b) === i);
+  const have = bs.filter(b => METHODS.some(([m]) => projData(A, b, m))), ms = METHODS.filter(([m]) => have.some(b => projData(A, b, m)));
+  if (!have.length) { box.innerHTML = '<p class="muted">no projections (switch on PCA, t-SNE or UMAP in the Samples tab; t-SNE and UMAP need fewer than 1000 points)</p>'; return; }
+  const lay = store.get("proj", "models"), cell = (b, m, t, W) => projData(A, b, m) ? scatter(t, projData(A, b, m), W) : `<figure class="panel"><figcaption>${esc(t)}</figcaption><p class="muted small">not available</p></figure>`;
+  const names = [...new Set(have.flatMap(b => Object.keys(projData(A, b, ms[0][0]) || projData(A, b, ms.find(([m]) => projData(A, b, m))[0]))))];
+  let body = "";
+  if (lay === "models") body = have.map(b => `<div class="by-model"><h4>${esc(b)}</h4><div class="grid-row" style="--n:${ms.length}">${ms.map(([m, l]) => cell(b, m, l, 360)).join("")}</div></div>`).join("");
+  else if (lay === "methods") body = ms.map(([m, l]) => `<div class="by-model"><h4>${l}</h4><div class="grid-row" style="--n:${Math.min(have.length, 4)}">${have.map(b => cell(b, m, b, 300)).join("")}</div></div>`).join("");
+  else { const sb = store.get("pb", have[0]), sm = store.get("pm", ms[0][0]), bb = have.includes(sb) ? sb : have[0], mm = ms.some(([m]) => m === sm) ? sm : ms[0][0]; body = `<div class="row"><div class="field"><label for="pj-b">Model</label><select id="pj-b" class="inline">${have.map(b => `<option ${b === bb ? "selected" : ""}>${esc(b)}</option>`).join("")}</select></div><div class="field"><label for="pj-m">Method</label><select id="pj-m" class="inline">${ms.map(([m, l]) => `<option value="${m}" ${m === mm ? "selected" : ""}>${l}</option>`).join("")}</select></div></div>${cell(bb, mm, ms.find(([m]) => m === mm)[1], 640)}`; }
+  box.innerHTML = `<div class="row"><div class="field"><label>Layout</label><div id="proj-layout" class="seg small" role="group" aria-label="Projection layout">${[["models", "Row per model"], ["methods", "Row per method"], ["single", "Single large"]].map(([k, l]) => `<button type="button" data-l="${k}" class="${lay === k ? "on" : ""}">${l}</button>`).join("")}</div></div></div>${legend(Object.keys(projData(A, have[0], ms.find(([m]) => projData(A, have[0], m))[0])))}${body}<p class="muted small">All points shown, no subsampling. Distances between far-apart clusters are not meaningful in t-SNE or UMAP; use them to see grouping, not to measure.</p>${agreementHtml(A)}`;
+  box.querySelectorAll("#proj-layout button").forEach(x => x.onclick = () => { store.set("proj", x.dataset.l); projections(A); });
+  const pb = $("#pj-b"), pm = $("#pj-m"); if (pb) { pb.onchange = () => { store.set("pb", pb.value); projections(A); }; pm.onchange = () => { store.set("pm", pm.value); projections(A); }; }
+  const aa = $("#ag-a"), ab = $("#ag-b"); if (aa) aa.onchange = ab.onchange = () => { store.set("pair", [aa.value, ab.value]); projections(A); };
 }
 function hexPanel(name, P, cells, max, W = 230) {
   const [x0, x1, y0, y1] = P.box, n = P.bins, sx = (x1 - x0) / n, sy = (y1 - y0) / n * Math.sqrt(3), H = W * (y1 - y0) / ((x1 - x0) || 1) || W, kx = W / (x1 - x0), ky = H / (y1 - y0), r = sx * kx / Math.sqrt(3) * 1.05;
@@ -215,10 +246,9 @@ function charts(r) {
   ["twonn", "pca", "embed2d"].forEach(t => { $("#card-" + t).hidden = view === "type" && tsel.value !== t; });
   let pcaMore = "";
   if (view === "type") {
-    const t = tsel.value, tgt = $("#" + t), L = blocks((b, k, o) => { if (t === "twonn") twonnCharts(A, b, k, o, false); else if (t === "pca") pcaCharts(A, b, k, o); else embed2dCharts(A, b, k, ((A.pca || {})[b] || {})[k], o); });
-    tgt.innerHTML = t === "twonn" ? crossDepth((A.twonn || {}).rows || []) : "";
-    L.forEach(d => tgt.append(d));
-  } else { twonnCharts(A, sel.value, lsel.value); pcaMore = pcaCharts(A, sel.value, lsel.value); embed2dCharts(A, sel.value, lsel.value, ((A.pca || {})[sel.value] || {})[lsel.value]); }
+    const t = tsel.value, tgt = $("#" + t), L = t === "embed2d" ? [] : blocks((b, k, o) => { if (t === "twonn") twonnCharts(A, b, k, o, false); else if (t === "pca") pcaCharts(A, b, k, o); }); 
+    if (t === "embed2d") projections(A); else { tgt.innerHTML = t === "twonn" ? crossDepth((A.twonn || {}).rows || []) : ""; L.forEach(d => tgt.append(d)); }
+  } else { twonnCharts(A, sel.value, lsel.value); pcaMore = pcaCharts(A, sel.value, lsel.value); projections(A); }
   const qc = bars("Protein length (kept records)", bins, Object.fromEntries(samples.map(s => [s, A.samples[s].length_hist])), v => `${v} proteins`);
   let html = "";
   if (samples.some(s => A.samples[s].dedup)) html += `<h4>MMseqs2 deduplication</h4><table><tr><th>sample</th><th>proteins</th><th>representatives</th><th>represented by another sample</th><th>settings</th></tr>${samples.map(s => { const d = A.samples[s].dedup; return d ? `<tr><td>${esc(s)}</td><td>${d.proteins}</td><td>${d.representatives}</td><td>${d.represented_in_other_samples}</td><td>${esc(d.mode)} id ${d.min_seq_id} cov ${d.coverage} (${esc(d.scope)}, mmseqs ${esc(d.mmseqs_version)})</td></tr>` : ""; }).join("")}</table>`;

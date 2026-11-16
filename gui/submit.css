@@ -126,3 +126,7 @@ details[open] > summary::before { transform: rotate(90deg); }
 .by-model { border-top: 1px solid var(--hair); margin-top: 14px; padding-top: 4px; }
 .by-model:first-child { border-top: 0; margin-top: 0; }
 .field[hidden] { display: none; }
+.grid-row { display: grid; grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr)); gap: 12px; align-items: start; }
+.grid-row .panel { min-width: 0; }
+.grid-row svg { height: auto; }
+@media (max-width: 760px) { .grid-row { grid-template-columns: 1fr; } }

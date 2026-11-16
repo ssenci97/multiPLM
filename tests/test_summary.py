@@ -61,3 +61,14 @@ def test_embed2d_at_limit_is_skipped(tmp_path):
     agg = run_summary(tmp_path, 100, 200)
     assert agg["embed2d"]["fake_12"]["layer_2/mean"] == {"skipped": "n >= 200"}
     assert "points" not in agg["pca"]["fake_12"]["layer_2/mean"]
+
+def test_embed2d_agreement_across_backends(tmp_path):
+    import shutil
+    a = tmp_path / "results" / "x"; fake_analysis(a, n=60)
+    shutil.copytree(a / "embeddings" / "fake_12", a / "embeddings" / "fake_13")
+    cfg = tmp_path / "p.yaml"; cfg.write_text(yaml.safe_dump(dict(summarize=dict(pairs=20, embed2d=dict(enabled=True, max_points=1000)))))
+    env = dict(os.environ, MP_DADAPY_PYTHON=sys.executable, PYTHONPATH=os.path.join(ROOT, "tests", "stub_dadapy"))
+    r = subprocess.run([sys.executable, f"{ROOT}/src/summarize.py", "--analysis_dir", str(a), "--yaml-in", str(cfg)], capture_output=True, text=True, env=env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    g = json.loads((a / "aggregates.json").read_text())["embed2d_agreement"]
+    assert g["backends"] == ["fake_12", "fake_13"] and g["proteins"] == 120 and g["rsa"][0][1] > 0.999 and g["knn"][0][1] == 1.0
